@@ -15,7 +15,7 @@ export const useAuthStore = defineStore('auth', () => {
     const router = useRouter();
     // URLs API Backend
     console.log('DEBUG VERCEL ENV: Controllo variabili d\'ambiente...');
-    onsole.log('DEBUG VERCEL ENV: Contenuto completo di import.meta.env:', import.meta.env);
+    console.log('DEBUG VERCEL ENV: Contenuto completo di import.meta.env:', import.meta.env);
     console.log('DEBUG VERCEL ENV: Valore letto per VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
     const BASE_API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'; // Fallback per locale
     console.log('DEBUG VERCEL ENV: Valore effettivo di BASE_API_URL dopo fallback:', BASE_API_URL);
