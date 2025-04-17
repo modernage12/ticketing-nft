@@ -1,0 +1,395 @@
+/* Importazione Font da Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+/* Definizione Variabili Colore Globali */
+:root {
+  /* Colori di base */
+  --color-background: #ffffff;
+  --color-background-soft: #f9fafb;
+  --color-background-mute: #f3f4f6;
+
+  /* Bordi */
+  --color-border: #e5e7eb;
+  --color-border-hover: #d1d5db;
+
+  /* Testo */
+  --color-heading: #111827;
+  --color-text: #374151;
+  --color-text-light: #6b7280;
+
+  /* Alias per compatibilità */
+  --vt-c-text-light-1: var(--color-text);
+  --vt-c-text-light-2: var(--color-text-light);
+
+  /* Colori primari e azioni */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-soft: #eff6ff;
+  
+  /* Testi su sfondo colorato */
+  --color-text-on-primary: #ffffff;
+  --color-text-on-dark: #ffffff;
+  
+  /* Colori per card eventi */
+  --color-card-background: #ffffff;
+  --color-card-text: var(--color-text);
+  --color-card-border: var(--color-border);
+  
+  /* Colori per eventi */
+  --color-event-background: #ffffff;
+  --color-event-text: var(--color-text);
+  --color-event-border: var(--color-border);
+}
+
+/* Reset Base e Stili Globali */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-weight: normal;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--color-text);
+  background: var(--color-background);
+  transition: color 0.5s, background-color 0.5s;
+  line-height: 1.6;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+    Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 15px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Layout principale */
+#app {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Stile link di base */
+a {
+  text-decoration: none;
+  color: var(--color-primary);
+  transition: color 0.3s;
+}
+
+a:hover {
+  color: var(--color-primary-hover);
+}
+
+/* Stili base per titoli */
+h1, h2, h3, h4 {
+  color: var(--color-heading);
+  margin-bottom: 0.8em;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 1.8rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+}
+
+h3 {
+  font-size: 1.2rem;
+}
+
+/* Header e navigazione */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background-color: var(--color-background-soft);
+  border-bottom: 1px solid var(--color-border);
+  width: 100%;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--color-heading);
+}
+
+.navigation {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.navigation a, 
+.navigation button {
+  text-decoration: none;
+  color: var(--color-text);
+  padding: 0.5rem 0.8rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.navigation a:hover {
+  color: var(--color-primary);
+}
+
+.navigation a.router-link-exact-active {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Bottone principale (blu) */
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-text-on-primary) !important;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-weight: 500;
+  text-align: center;
+  display: inline-block;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-hover);
+}
+
+/* Logout button */
+.navigation button.logout-button {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: inherit;
+}
+
+.navigation button.logout-button:hover {
+  border-color: var(--color-text);
+  background-color: var(--color-background-mute);
+}
+
+/* Contenuto principale */
+.app-main {
+  flex-grow: 1;
+  width: 100%;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 2rem;
+}
+
+/* Footer */
+.app-footer {
+  text-align: center;
+  padding: 1rem;
+  margin-top: auto;
+  font-size: 0.8rem;
+  color: var(--color-text-light);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-background-soft);
+  width: 100%;
+}
+
+/* Stili per la lista eventi */
+.eventi-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.evento-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--color-event-background);
+  color: var(--color-event-text);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.evento-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+}
+
+.evento-header {
+  padding: 1rem;
+  background-color: var(--color-background-soft);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.evento-titolo {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-heading);
+}
+
+.evento-content {
+  padding: 1rem;
+}
+
+.evento-info {
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+}
+
+.evento-data, 
+.evento-luogo, 
+.evento-prezzo, 
+.evento-disponibilita {
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.evento-descrizione {
+  color: var(--color-text-light);
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+.evento-footer {
+  padding: 1rem;
+  display: flex;
+  justify-content: flex-start;
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-background-soft);
+}
+
+/* Bottone acquista */
+.compra-biglietto {
+  background-color: var(--color-primary);
+  color: var(--color-text-on-primary);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-weight: 500;
+}
+
+.compra-biglietto:hover {
+  background-color: var(--color-primary-hover);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    padding: 1rem;
+  }
+  
+  .navigation {
+    margin-top: 1rem;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .app-main {
+    padding: 1rem;
+  }
+}
+
+/* Stile per la pagina "I miei biglietti" */
+.biglietti-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.biglietto-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--color-card-background);
+  color: var(--color-card-text);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.biglietto-header {
+  padding: 1rem;
+  background-color: var(--color-background-soft);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.biglietto-content {
+  padding: 1rem;
+}
+
+.biglietto-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-background-soft);
+}
+
+/* Form styles */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--color-heading);
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+
+.form-submit {
+  background-color: var(--color-primary);
+  color: var(--color-text-on-primary);
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-top: 1rem;
+}
+
+.form-submit:hover {
+  background-color: var(--color-primary-hover);
+}
+
+/* Utility classes */
+.text-center {
+  text-align: center;
+}
+
+.mb-1 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-2 {
+  margin-bottom: 1rem;
+}
+
+.mb-3 {
+  margin-bottom: 1.5rem;
+}
