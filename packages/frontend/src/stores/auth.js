@@ -14,10 +14,16 @@ export const useAuthStore = defineStore('auth', () => {
     const loading = ref(false); // Loading generico per azioni principali
     const router = useRouter();
     // URLs API Backend
-    const AUTH_API_URL = 'http://localhost:3000/api/auth';
-    const TICKETS_API_URL = 'http://localhost:3000/api/tickets';
-    const EVENTS_API_URL = 'http://localhost:3000/api/events';
-    const MARKETPLACE_API_URL = 'http://localhost:3000/api/marketplace';
+    console.log('DEBUG VERCEL ENV: Controllo variabili d\'ambiente...');
+    onsole.log('DEBUG VERCEL ENV: Contenuto completo di import.meta.env:', import.meta.env);
+    console.log('DEBUG VERCEL ENV: Valore letto per VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
+    const BASE_API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'; // Fallback per locale
+    console.log('DEBUG VERCEL ENV: Valore effettivo di BASE_API_URL dopo fallback:', BASE_API_URL);
+    console.log('------------------------------------');
+    const AUTH_API_URL = `${BASE_API_URL}/api/auth`;
+    const TICKETS_API_URL = `${BASE_API_URL}/api/tickets`;
+    const EVENTS_API_URL = `${BASE_API_URL}/api/events`;
+    const MARKETPLACE_API_URL = `${BASE_API_URL}/api/marketplace`;
     // Dati specifici e loro stati
     const myTickets = ref([]);
     const events = ref([]);
