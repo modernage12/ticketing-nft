@@ -1,4 +1,4 @@
-// 1. Carica le variabili d'ambiente dal file .env come primissima cosa
+// 1. Carica le variabili d'ambiente dal file .env come primissima cosaAUTH_API_URLcorsOptions
 require('dotenv').config();
 
 // 2. Importa i moduli necessari
@@ -18,10 +18,12 @@ const internalRoutes = require('./routes/internalRoutes');
 // 3. Crea l'applicazione Express
 const app = express();
 const port = process.env.PORT || 3000;
+const VERCEL_URL = 'https://ticketing-nft-frontend.vercel.app';
+const LOCAL_FRONTEND_URL = 'http://localhost:5173';
 
 // 4. Configura CORS in modo più completo
 const corsOptions = {
-  origin: 'http://localhost:5173', // Assicurati che la porta sia quella del tuo frontend Vue
+  origin: [VERCEL_URL, LOCAL_FRONTEND_URL], // Assicurati che la porta sia quella del tuo frontend Vue
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Specifica i metodi HTTP permessi
   allowedHeaders: "Content-Type, Authorization", // Specifica gli header permessi (fondamentale per il token JWT!)
   optionsSuccessStatus: 200 // Per compatibilità
