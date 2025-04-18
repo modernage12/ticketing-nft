@@ -5,6 +5,7 @@ import MyTicketsView from '../views/MyTicketsView.vue' // <-- Importa la nuova v
 import { useAuthStore } from '@/stores/auth' // <-- Importa lo store auth
 import EventsView from '../views/EventsView.vue'
 import MarketplaceView from '../views/MarketplaceView.vue'
+import SettingsView from '../views/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -31,6 +32,13 @@ const router = createRouter({
   name: 'marketplace',
   component: MarketplaceView,
   meta: { requiresAuth: true } // Richiede login per vedere il marketplace
+},
+
+{
+  path: '/settings',
+  name: 'settings',
+  component: SettingsView, // Usa il componente importato sopra
+  meta: { requiresAuth: true } // Assicura che richieda autenticazione
 }
 
   ]

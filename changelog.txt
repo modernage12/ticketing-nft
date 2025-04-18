@@ -1,0 +1,46 @@
+[Inizio Sessione] - Discussione Funzionalità Future: Abbiamo discusso le idee future post-MVP, scegliendo di concentrarci su:
+
+Integrazione Wallet Esterni (Non-Custodial)
+Creazione Eventi/NFT da UI
+[~16:00 CEST] - Definizione Modello Ibrido Wallet: Hai chiarito di volere un sistema ibrido: gli utenti possono collegare un wallet esterno oppure usare un wallet interno gestito dal backend (custodial), per mantenere un'esperienza semplice per i neofiti.
+
+[~16:05 CEST] - Avvio Fase A (Integrazione Wallet Esterno - Frontend): Abbiamo deciso di iniziare implementando la possibilità di collegare wallet esterni nel frontend Vue.
+
+[~16:05 CEST] - Proposta Store Pinia: Ho fornito il codice iniziale per uno store Pinia (useWalletStore) da salvare in stores/wallet.js per gestire lo stato del wallet.
+
+[~16:08 CEST] - Identificazione Componente UI: Dopo aver verificato che non esisteva un Navbar.vue dedicato, abbiamo identificato App.vue come il componente corretto dove inserire l'UI per la connessione del wallet (pulsante, stato).
+
+[~16:10 CEST] - Prima Modifica App.vue: Ti ho fornito le modifiche per App.vue per importare e usare useWalletStore e aggiungere il blocco HTML/Vue per il pulsante "Collega Wallet" e lo stato della connessione nella navbar.
+
+[~16:15 CEST] - Tentativo Push e Errore Git: Hai applicato le modifiche e hai tentato di fare git push, ma hai ricevuto l'errore rejected (fetch first) perché il repository remoto era più avanti di quello locale.
+
+[~16:16 CEST] - Risoluzione Errore Git (pull/merge): Ti ho guidato nell'eseguire git pull origin main e nel confermare il messaggio del commit di merge che si è aperto nell'editor.
+
+[~16:18 CEST] - Richiesta Annullamento Modifiche: Hai deciso di annullare le modifiche appena caricate su GitHub per poter testare meglio localmente prima.
+
+[~16:20 CEST] - Annullamento Modifiche (revert): Ti ho guidato nel processo di git revert:
+
+Identificazione dell'hash del commit da annullare (git log).
+Esecuzione di git revert <hash>.
+Conferma del messaggio del commit di revert nell'editor.
+Esecuzione di git push origin main per caricare l'annullamento su GitHub e aggiornare i file locali allo stato precedente.
+[~16:22 CEST] - Riavvio Implementazione Fase A (Locale):
+
+Hai ricreato il file stores/wallet.js.
+Hai fornito di nuovo il contenuto (revertito) di App.vue.
+Ti ho fornito nuovamente le modifiche per App.vue (import store, uso store, UI wallet) con indicatori più chiari nel codice.
+[~16:25 CEST] - Test Locale Positivo: Hai applicato le modifiche ad App.vue, avviato l'ambiente locale e confermato che il pulsante "Collega Wallet" ora è visibile, non ci sono errori nel terminale/console, e la connessione a MetaMask funziona correttamente.
+[2025-04-18 16:37 CEST] - Aggiornamento Fase A: Risolto problema di disconnessione al cambio account. L'indirizzo nella UI ora si aggiorna correttamente (deferito aggiornamento del signer). Errore asincrono in console presente ma non bloccante.
+[2025-04-18 16:43 CEST] - Aggiornamento Fase A: Implementata logica setUserWalletPreference nello store e UI temporanea in App.vue per testare la scelta tra wallet interno/esterno. Test locale conferma che la visibilità della sezione wallet esterno dipende correttamente dallo stato isUsingExternalWallet.
+[2025-04-18 16:56 CEST] - Aggiornamento Fase A: Implementato flusso v2 per wallet ibrido. Rimossi controlli di test. Modificati App.vue e wallet.js per usare connect/disconnect come meccanismo di switch tra contesto wallet interno (default) ed esterno. Test locale conferma funzionamento base.
+[2025-04-18 17:05 CEST] - Aggiornamento Fase A: Aggiunta funzione ensureSigner allo store useWalletStore (wallet.js) per verificare/aggiornare il signer del wallet esterno prima delle azioni future. Funzione definita ma non ancora utilizzata.
+[2025-04-18 17:10 CEST] - Aggiornamento Persistenza Wallet: Modificata localmente tabella users in PostgreSQL aggiungendo colonna wallet_preference TEXT DEFAULT 'internal' NOT NULL.
+[2025-04-18 17:16 CEST] - Aggiornamento Persistenza Wallet: Modificato backend (userService, authController) per leggere la colonna wallet_preference dal DB e includerla nella risposta API di login.
+[2025-04-18 17:41 CEST] - Aggiornamento Ambiente: Configurato ambiente di sviluppo completamente locale: Frontend punta a Backend locale (http://localhost:3000), Backend punta a Database PostgreSQL locale.
+[2025-04-18 17:47 CEST] - Aggiornamento Persistenza Wallet & Bugfix: Risolto errore TypeError: walletStore.resetState is not a function modificando logout in auth.js per chiamare disconnectWallet. Corretto funzionamento di login, logout e inizializzazione preferenza wallet nell'ambiente locale verificato.
+[2025-04-18 17:58 CEST] - Aggiornamento Persistenza Wallet: Modificato App.vue per nascondere la sezione UI del wallet esterno se walletStore.isUsingExternalWallet è false. Test locale conferma che dopo il login con preferenza 'internal', la sezione wallet è correttamente nascosta.
+[2025-04-18 18:05 CEST] - Aggiornamento Persistenza Wallet: Creata route /settings, link in App.vue e componente SettingsView.vue. Implementata UI e logica frontend in SettingsView.vue per visualizzare stato wallet (interno/esterno) e switchare modalità tramite connectWallet/disconnectWallet dello store. Test locale UI OK.
+[2025-04-18 21:01 CEST] - Aggiornamento Persistenza Wallet: Completata implementazione e test della persistenza della preferenza wallet. L'utente può cambiare modalità (Interno/Esterno) dalla pagina Impostazioni, la scelta viene salvata nel DB tramite API backend e viene caricata correttamente al login successivo, aggiornando lo stato e la UI del frontend come previsto.
+[2025-04-18 21:40 CEST] - Aggiornamento SIWE & DB: Aggiunta colonna external_wallet_address (TEXT NULL UNIQUE) e reso password_hash NULLable nella tabella users del DB locale. Implementata e esportata funzione findOrCreateUserByAddress in userService.js per gestire lookup/creazione utenti basata su indirizzo esterno. Backend pronto per verifica SIWE.
+[2025-04-18 22:18 CEST] - Rimozione Aggiornamento SIWE: Annullata l'implementazione di SIWE etc riportato i file e il progetto alle condizioni prima di Aggiornamento SIWE & DB.
+[2025-04-18 22:28 CEST] - Bugfix Login: Risolto problema login standard non funzionante reinserendo la funzione handleLogin mancante nel componente LoginView.vue. Login username/password ora funzionante.

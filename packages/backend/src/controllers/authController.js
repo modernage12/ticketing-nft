@@ -36,6 +36,7 @@ const registerUser = async (req, res) => {
     }
 };
 
+
 // === NUOVA FUNZIONE LOGIN ===
 const loginUser = async (req, res) => {
     const { username, password } = req.body;
@@ -63,8 +64,11 @@ const loginUser = async (req, res) => {
         const payload = {
             userId: user.user_id,
             username: user.username,
-            walletAddress: user.wallet_address // Includiamo anche l'indirizzo wallet nel token
+            walletAddress: user.wallet_address, // Indirizzo wallet interno
+            walletPreference: user.wallet_preference, // Includi la preferenza nel payload del token
+            role: user.role
         };
+
         const jwtSecret = process.env.JWT_SECRET;
         if (!jwtSecret) {
              throw new Error('La chiave segreta JWT non è configurata nel .env!');
@@ -75,10 +79,17 @@ const loginUser = async (req, res) => {
             { expiresIn: '1h' } // Il token scade tra 1 ora (puoi cambiare la durata)
         );
 
-        // 4. Invia il token al client
+        // 4. Invia il token E i dati utente (inclusa la preferenza) al client
         res.status(200).json({
             message: 'Login effettuato con successo!',
-            token: token // Il frontend salverà questo token
+            token: token,
+            // Aggiungiamo un oggetto 'user' con i dati necessari al frontend
+            user: {
+                userId: user.user_id,
+                username: user.username,
+                walletAddress: user.wallet_address, // Indirizzo wallet interno
+                walletPreference: user.wallet_preference // --> AGGIUNTO: La preferenza letta dal DB
+            }
         });
 
     } catch (error) {
@@ -99,8 +110,32 @@ const getCurrentUser = (req, res) => {
     }
 };
 
+const updateUserPreferences = async (req, res) => {
+    const userId = req.user.userId; // Ottenuto dal token JWT tramite il middleware protect
+    const { walletPreference } = req.body; // Legge dal corpo della richiesta JSON
+
+    // Validazione input base
+    if (!walletPreference || (walletPreference !== 'internal' && walletPreference !== 'external')) {
+        return res.status(400).json({ error: 'Campo walletPreference mancante o non valido (deve essere "internal" o "external").' });
+    }
+
+    try {
+        const success = await userService.updateUserWalletPreference(userId, walletPreference);
+        if (success) {
+            res.status(200).json({ message: 'Preferenza wallet aggiornata con successo.' });
+        } else {
+             // Questo non dovrebbe accadere se l'userId dal token è valido
+             res.status(404).json({ error: 'Utente non trovato.' });
+        }
+    } catch (error) {
+        console.error("Errore in updateUserPreferences:", error);
+        res.status(500).json({ error: error.message || 'Errore interno del server durante l\'aggiornamento delle preferenze.' });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
-    getCurrentUser // Esporta la nuova funzione
+    getCurrentUser,
+    updateUserPreferences
 };

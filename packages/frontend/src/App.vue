@@ -5,10 +5,12 @@ import { onMounted } from 'vue';
 
 // Importiamo lo store Pinia per l'autenticazione
 import { useAuthStore } from '@/stores/auth';
+import { useWalletStore } from '@/stores/wallet';
 
 // Otteniamo l'istanza dello store e del router
 const authStore = useAuthStore();
 const router = useRouter(); // Lo usiamo per il logout programmatico se necessario
+const walletStore = useWalletStore();
 
 // Funzione da chiamare al click del bottone Logout
 const handleLogout = () => {
@@ -42,12 +44,30 @@ onMounted(() => {
           <RouterLink to="/events">Eventi</RouterLink>
           <RouterLink to="/my-tickets">I Miei Biglietti</RouterLink>
           <RouterLink to="/marketplace">Marketplace</RouterLink>
+          <RouterLink to="/settings">Impostazioni</RouterLink>
           <button @click="handleLogout" class="logout-button">Logout ({{ authStore.user?.username }})</button>
           </template>
 
         <template v-if="!authStore.isLoggedIn">
           <RouterLink to="/login">Login</RouterLink>
           <RouterLink to="/register">Registrati</RouterLink>
+        </template>
+        <template v-if="walletStore.isUsingExternalWallet">
+            <div class="wallet-section">
+               <template v-if="!walletStore.isConnected">
+                 <button @click="walletStore.connectWallet" :disabled="walletStore.isConnecting" class="wallet-button connect">
+                   {{ walletStore.isConnecting ? 'Connessione...' : 'Collega Wallet' }}
+                 </button>
+                 <p v-if="walletStore.error" class="wallet-error">{{ walletStore.error }}</p>
+               </template>
+
+               <template v-else>
+                 <span class="wallet-address">Wallet: {{ walletStore.shortAddress }}</span>
+                 <button @click="walletStore.disconnectWallet" class="wallet-button disconnect">
+                   Disconnetti
+                 </button>
+               </template>
+            </div>
         </template>
       </nav>
     </header>
@@ -228,4 +248,64 @@ onMounted(() => {
   background-color: var(--color-background-soft);
   width: 100%;
 }
+
+.wallet-section {
+  margin-left: auto; /* Spinge la sezione a destra */
+  display: flex;
+  align-items: center;
+  gap: 0.75rem; /* Leggero aumento dello spazio */
+}
+
+.wallet-button {
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 0.9em;
+  white-space: nowrap;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+}
+.wallet-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Usiamo una variabile '--color-success' per il verde, se non esiste puoi definirla
+   in :root nel tuo main.css o sostituirla con un colore es. #42b983 */
+.wallet-button.connect:hover:not(:disabled) {
+   border-color: var(--color-success, #42b983);
+   color: var(--color-success, #42b983);
+   /* Sfondo leggermente più visibile */
+   background-color: var(--color-success-bg, rgba(66, 185, 131, 0.15));
+}
+
+/* Usiamo una variabile '--color-danger' per il rosso */
+.wallet-button.disconnect:hover {
+   border-color: var(--color-danger, #dc3545);
+   color: var(--color-danger, #dc3545);
+   background-color: var(--color-danger-bg, rgba(220, 53, 69, 0.15));
+}
+
+.wallet-address {
+   font-size: 0.9em;
+   color: var(--color-text-light); /* Usiamo il grigio chiaro del footer */
+   background-color: var(--color-background-mute); /* Sfondo leggero per distinguerlo */
+   padding: 0.3rem 0.6rem; /* Stesso padding dei bottoni */
+   border-radius: 4px;
+   white-space: nowrap;
+}
+
+.wallet-error {
+    color: var(--color-danger, #dc3545);
+    font-size: 0.8em;
+    margin: 0; /* Rimuove margini di default del paragrafo */
+    margin-left: 0.5rem; /* Aggiunge spazio dal pulsante */
+}
+
+/* ========================================== */
+/* === FINE REGOLE CSS NUOVE === */
+/* ========================================== */
+
 </style>

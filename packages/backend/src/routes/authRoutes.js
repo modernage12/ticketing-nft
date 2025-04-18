@@ -10,6 +10,8 @@ router.post('/login', authController.loginUser); // Aggiungi questa riga
 // GET /api/auth/me (Rotta protetta)
 // Applichiamo il middleware 'protect' PRIMA della funzione del controller
 router.get('/me', protect, authController.getCurrentUser);
+// PUT /api/auth/me/preferences (Rotta protetta per aggiornare le preferenze dell'utente loggato)
+router.put('/me/preferences', protect, authController.updateUserPreferences);
 
 // TODO: Aggiungere rotta POST /api/auth/login qui
 

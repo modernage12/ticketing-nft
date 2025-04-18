@@ -5,6 +5,7 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useWalletStore } from '@/stores/wallet';
 
 export const useAuthStore = defineStore('auth', () => {
     // --- STATO ---
@@ -13,6 +14,7 @@ export const useAuthStore = defineStore('auth', () => {
     const error = ref(null); // Errore generico per azioni principali
     const loading = ref(false); // Loading generico per azioni principali
     const router = useRouter();
+    const walletStore = useWalletStore();
     // URLs API Backend
     console.log('DEBUG VERCEL ENV: Controllo variabili d\'ambiente...');
     console.log('DEBUG VERCEL ENV: Contenuto completo di import.meta.env:', import.meta.env);
@@ -34,6 +36,41 @@ export const useAuthStore = defineStore('auth', () => {
     const eventsError = ref(null);
     const listingsError = ref(null);
     const myTicketsError = ref(null);
+
+    /**
+     * Azione per chiamare l'API backend e salvare la preferenza wallet dell'utente.
+     * @param {'internal' | 'external'} preference La nuova preferenza da salvare.
+     */
+    async function updateWalletPreferenceAPI(preference) {
+        console.log(`AuthStore: Chiamo API per aggiornare preferenza a ${preference}`);
+        // Verifica validità input (anche se già validato dal backend)
+        if (preference !== 'internal' && preference !== 'external') {
+          console.error("updateWalletPreferenceAPI: Valore preferenza non valido:", preference);
+          throw new Error("Valore preferenza non valido."); // Lancia errore per il .catch nel componente
+        }
+        if (!token.value) {
+          console.error("updateWalletPreferenceAPI: Nessun token, impossibile chiamare API.");
+          throw new Error("Utente non autenticato.");
+        }
+  
+        // Costruisci URL e corpo richiesta (qui usiamo le costanti interne allo store)
+        const url = `${AUTH_API_URL}/me/preferences`; // AUTH_API_URL è accessibile qui dentro
+        const body = { walletPreference: preference };
+        const config = authHeader.value; // Prendi l'header di autenticazione
+  
+        try {
+          // Esegui la chiamata PUT
+          await axios.put(url, body, config);
+          console.log(`AuthStore: Preferenza '${preference}' salvata con successo nel backend.`);
+          // Potremmo voler aggiornare lo stato user.value qui se l'API restituisse l'utente aggiornato,
+          // ma per ora non è necessario perché lo stato FE è già stato aggiornato prima della chiamata.
+          return true; // Indica successo
+        } catch (err) {
+          console.error(`Errore durante il salvataggio della preferenza '${preference}' nel backend:`, err.response?.data || err.message);
+          // Rilancia l'errore per poterlo gestire nel componente che ha chiamato l'azione
+          throw new Error(err.response?.data?.error || `Errore nel salvare la preferenza '${preference}'.`);
+        }
+      }
 
 
     // --- GETTERS ---
@@ -60,11 +97,18 @@ export const useAuthStore = defineStore('auth', () => {
             const response = await axios.get(`${AUTH_API_URL}/me`, authHeader.value);
             user.value = response.data;
             console.log("AuthStore: Dati utente recuperati OK:", JSON.stringify(user.value));
+            if (user.value && user.value.walletPreference) {
+                walletStore.initializePreference(user.value.walletPreference);
+            } else {
+                 console.warn("AuthStore: walletPreference non trovato nei dati utente ricevuti da /me. Uso default (internal).");
+                 walletStore.initializePreference('internal'); // Fallback sicuro
+            }
         } catch (err) {
             console.error("AuthStore: Errore fetchUser:", err.response?.data || err.message);
             error.value = err.response?.data?.error || 'Errore recupero dati utente.';
             if (err.response?.status === 401 || err.response?.status === 403) {
                  console.log("AuthStore: Token non valido/scaduto durante fetchUser, eseguo logout...");
+                 walletStore.resetState();
                  await logout();
             }
             // Se l'errore non è 401/403, user rimane null o vecchio valore, l'errore è in error.value
@@ -124,6 +168,8 @@ export const useAuthStore = defineStore('auth', () => {
     // Logout utente
     async function logout() {
         console.log("AuthStore: Eseguo logout...");
+        // Resetta anche lo stato del wallet esterno al logout manuale
+        walletStore.disconnectWallet();
         token.value = null; user.value = null; myTickets.value = [];
         listings.value = []; events.value = []; localStorage.removeItem('authToken');
         error.value = null; eventsError.value = null; listingsError.value = null; myTicketsError.value = null;
@@ -284,6 +330,7 @@ export const useAuthStore = defineStore('auth', () => {
         listingsLoading, eventsError, listingsError, myTicketsError,
         isLoggedIn, authHeader,
         loadToken, fetchUser, register, login, logout, fetchMyTickets, fetchEvents,
-        buyTicket, fetchListings, listTicketForSale, buyListedTicket, cancelListing
+        buyTicket, fetchListings, listTicketForSale, buyListedTicket, cancelListing, 
+        updateWalletPreferenceAPI
     };
 });

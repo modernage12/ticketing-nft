@@ -58,7 +58,7 @@ const createUser = async (username, password) => {
 
 // Funzione per trovare utente (invariata)
 const findUserByUsername = async (username) => {
-    const query = 'SELECT * FROM Users WHERE username = $1';
+    const query = 'SELECT * FROM users WHERE LOWER(username) = LOWER($1)';
     try {
         const result = await pool.query(query, [username]);
         return result.rows[0]; // Restituisce l'utente se trovato, altrimenti undefined
@@ -68,7 +68,35 @@ const findUserByUsername = async (username) => {
     }
 };
 
+/**
+ * Aggiorna la preferenza del wallet per un utente specifico.
+ * @param {number} userId L'ID dell'utente.
+ * @param {'internal' | 'external'} walletPreference La nuova preferenza.
+ * @returns {Promise<boolean>} True se l'aggiornamento ha avuto successo.
+ */
+const updateUserWalletPreference = async (userId, walletPreference) => {
+    // Validazione semplice del valore della preferenza
+    if (walletPreference !== 'internal' && walletPreference !== 'external') {
+        throw new Error('Valore non valido per walletPreference.');
+    }
+    const query = `
+        UPDATE users
+        SET wallet_preference = $1
+        WHERE user_id = $2;
+    `;
+    try {
+        const result = await pool.query(query, [walletPreference, userId]);
+        // result.rowCount dovrebbe essere 1 se l'utente è stato trovato e aggiornato
+        return result.rowCount === 1;
+    } catch (error) {
+        console.error(`Errore nell'aggiornare wallet_preference per userId ${userId}:`, error);
+        throw new Error('Errore database durante aggiornamento preferenza wallet.');
+    }
+};
+
+
 module.exports = {
     createUser,
-    findUserByUsername // Assicurati sia esportato
+    findUserByUsername, // Assicurati sia esportato
+    updateUserWalletPreference
 };

@@ -1,42 +1,38 @@
 <script setup>
 import { ref } from 'vue';
 import { useAuthStore } from '@/stores/auth'; // Importa lo store (usa @ per src/)
-import { RouterLink } from 'vue-router'; // Assicurati sia importato se usi <RouterLink>
+import { RouterLink, useRouter } from 'vue-router'; // Importa useRouter
 
 const username = ref('');
 const password = ref('');
 const authStore = useAuthStore(); // Ottieni l'istanza dello store
 
 const handleLogin = async () => {
-  // === LOG DI CONTROLLO INIZIALE ===
-  console.log("--- handleLogin CHIAMATO ---"); // Log 1
+  // Riprendiamo i log di debug che avevamo messo, possono sempre servire
+  console.log("--- handleLogin CHIAMATO ---");
+  console.log("Valore username:", username.value);
+  console.log("Valore password:", password.value ? '********' : 'vuota');
+  console.log("Oggetto authStore esiste?", !!authStore);
+  console.log("Funzione authStore.login esiste?", typeof authStore.login === 'function');
 
-  // === LOG DI DEBUG AGGIUNTIVI ===
-  console.log("Valore username:", username.value); // Log 2
-  console.log("Valore password:", password.value ? '********' : 'vuota'); // Log 3 (Non loggare password reali)
-  console.log("Oggetto authStore esiste?", !!authStore); // Log 4
-  console.log("Funzione authStore.login esiste?", typeof authStore.login === 'function'); // Log 5
-  // =============================
+  // Resetta errore store prima di tentare
+  authStore.error = null;
 
-  // Resetta errore locale (se ne avessimo uno) e errore store
-  authStore.error = null;
-
-  // Aggiungiamo try/catch qui nel componente per massima sicurezza
-  try {
-      // === Log PRIMA della chiamata ===
-      console.log(">>> LoginView: Sto per chiamare authStore.login..."); // Log 6
-      await authStore.login(username.value, password.value);
-      // === Log DOPO la chiamata (se non ci sono errori await) ===
-      // Se vedi questo log, significa che l'azione login dello store è terminata (con successo o errore gestito internamente)
-      console.log(">>> LoginView: Chiamata a authStore.login TERMINATA (await completato)."); // Log 7
-      // La redirezione avviene dentro l'azione dello store se ha successo
-  } catch (componentError) {
-      // Cattura errori RILANCIATI dall'azione dello store o altri errori imprevisti qui
-      console.error("!!! ERRORE catturato nel componente LoginView durante handleLogin:", componentError);
-      // L'errore dovrebbe essere già impostato in authStore.error dall'azione,
-      // ma loggarlo qui conferma che l'azione ha effettivamente lanciato (throw) un errore.
-  }
+  try {
+    console.log(">>> LoginView: Sto per chiamare authStore.login...");
+    await authStore.login(username.value, password.value);
+    // Se arriva qui, l'azione login nello store è terminata (con successo o errore gestito)
+    // Il redirect avviene dentro l'azione login se ha successo
+    console.log(">>> LoginView: Chiamata a authStore.login TERMINATA.");
+  } catch (componentError) {
+    // Cattura solo errori gravi RILANCIATI dall'azione login (es. fallimento fetchUser dopo login ok)
+    // L'errore di credenziali errate viene gestito e messo in authStore.error DENTRO l'azione login.
+    console.error("!!! ERRORE catturato nel componente LoginView durante handleLogin:", componentError);
+    // Potremmo voler mostrare un errore generico qui se necessario,
+    // ma di solito l'errore specifico è già in authStore.error e mostrato nel template.
+  }
 };
+
 </script>
 
 <template>
@@ -56,6 +52,8 @@ const handleLogin = async () => {
         {{ authStore.loading ? 'Caricamento...' : 'Login' }}
       </button>
     </form>
+    <hr style="margin: 2rem 0;" />
+    
     <p>Non hai un account? <RouterLink to="/register">Registrati</RouterLink></p>
   </div>
 </template>
