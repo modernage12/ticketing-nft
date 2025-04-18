@@ -5,12 +5,10 @@ import { onMounted } from 'vue';
 
 // Importiamo lo store Pinia per l'autenticazione
 import { useAuthStore } from '@/stores/auth';
-import { useWalletStore } from '@/stores/wallet';
 
 // Otteniamo l'istanza dello store e del router
 const authStore = useAuthStore();
 const router = useRouter(); // Lo usiamo per il logout programmatico se necessario
-const walletStore = useWalletStore();
 
 // Funzione da chiamare al click del bottone Logout
 const handleLogout = () => {
@@ -51,23 +49,6 @@ onMounted(() => {
           <RouterLink to="/login">Login</RouterLink>
           <RouterLink to="/register">Registrati</RouterLink>
         </template>
-        <nav class="navigation">
-        <div class="wallet-section" style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem;">
-            <template v-if="!walletStore.isConnected">
-              <button @click="walletStore.connectWallet" :disabled="walletStore.isConnecting" class="wallet-button connect">
-                {{ walletStore.isConnecting ? 'Connessione...' : 'Collega Wallet' }}
-              </button>
-              <p v-if="walletStore.error" style="color: red; font-size: 0.8em; margin: 0;">{{ walletStore.error }}</p>
-            </template>
-
-            <template v-else>
-              <span class="wallet-address" style="font-size: 0.9em; color: #c0c0c0;">Wallet: {{ walletStore.shortAddress }}</span>
-              <button @click="walletStore.disconnectWallet" class="wallet-button disconnect">
-                Disconnetti
-              </button>
-            </template>
-        </div>
-        </nav> // <-- Il blocco va aggiunto PRIMA di questa chiusura </nav>
       </nav>
     </header>
 
@@ -247,54 +228,4 @@ onMounted(() => {
   background-color: var(--color-background-soft);
   width: 100%;
 }
-
-/* ... regole CSS esistenti ... */
-
-/* ========================================== */
-/* ===== AGGIUNGI QUESTE REGOLE CSS ===== */
-/* ========================================== */
-.wallet-section {
-  /* Stili per il contenitore della sezione wallet, già inline nel template */
-  /* margin-left: auto; spinge a destra */
-  /* display: flex; align-items: center; gap: 0.5rem; */
-}
-
-.wallet-button {
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
-  cursor: pointer;
-  background: none;
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-  font-size: 0.9em; /* Leggermente più piccolo */
-  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
-}
-.wallet-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.wallet-button.connect:hover:not(:disabled) {
-   border-color: #42b983; /* Verde Vue come esempio */
-   color: #42b983;
-   background-color: rgba(66, 185, 131, 0.1);
-}
-.wallet-button.disconnect:hover {
-   border-color: #dc3545; /* Rosso come esempio */
-   color: #dc3545;
-   background-color: rgba(220, 53, 69, 0.1);
-}
-
-.wallet-address {
-   /* Già inline nello span */
-   /* font-size: 0.9em; color: #c0c0c0; */
-   background-color: rgba(255, 255, 255, 0.05); /* Sfondo leggero per distinguerlo */
-   padding: 0.2rem 0.5rem;
-   border-radius: 4px;
-   white-space: nowrap;
-}
-/* ========================================== */
-/* ===== FINE REGOLE CSS DA AGGIUNGERE ===== */
-/* ========================================== */
-
 </style>
