@@ -1,0 +1,15 @@
+steps:
+# Costruisci l'immagine Docker
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/nome-tuo-registry/ticketing-nft:$COMMIT_SHA', '.']
+  # Nota: Sostituisci 'europe-west1' con la tua regione Artifact Registry
+  # Nota: Sostituisci 'nome-tuo-registry' con il nome del tuo registry in Artifact Registry
+  # Assicurati che esista un Dockerfile nella root del progetto (il '.')
+
+# Fai il push dell'immagine su Artifact Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/nome-tuo-registry/ticketing-nft:$COMMIT_SHA']
+
+# Specifica quali immagini pushare (necessario se usi Artifact Registry)
+images:
+- 'europe-west1-docker.pkg.dev/$PROJECT_ID/nome-tuo-registry/ticketing-nft:$COMMIT_SHA'
