@@ -3,6 +3,8 @@ const router = express.Router();
 // Importiamo TUTTI i controller necessari
 const eventController = require('../controllers/eventController');
 const { protect } = require('../middleware/authMiddleware'); // Auth middleware
+// Importa il middleware di autenticazione admin
+const adminAuthMiddleware = require('../middleware/adminAuthMiddleware');
 
 // POST /api/events/:eventId/buy (Rotta protetta per comprare)
 router.post('/:eventId/buy', protect, eventController.buyTicket);
@@ -10,6 +12,10 @@ router.post('/:eventId/buy', protect, eventController.buyTicket);
 // === NUOVA ROTTA PER OTTENERE TUTTI GLI EVENTI ===
 // GET /api/events/ (Non protetta per ora, chiunque può vederli)
 router.get('/', eventController.getAllEvents);
+
+// POST /api/events/
+// Richiede autenticazione ADMIN
+router.post('/', adminAuthMiddleware, eventController.createEvent);
 
 
 module.exports = router;

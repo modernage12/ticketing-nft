@@ -75,6 +75,10 @@ export const useAuthStore = defineStore('auth', () => {
 
     // --- GETTERS ---
     const isLoggedIn = computed(() => !!token.value);
+    const isAdmin = computed(() => {
+        // Controlla se user.value esiste E se la sua proprietà isAdmin è true
+        return !!user.value && user.value.isAdmin === true;
+    });
     const authHeader = computed(() => {
         return token.value ? { headers: { Authorization: `Bearer ${token.value}` } } : { headers: {} };
     });
@@ -323,7 +327,6 @@ export const useAuthStore = defineStore('auth', () => {
         } finally { console.log(">>> cancelListing: Eseguo finally block"); loading.value = false; }
     }
 
-
     // Esporta tutto (verifica completezza)
     return {
         token, user, error, loading, myTickets, events, listings, eventsLoading,
@@ -331,6 +334,6 @@ export const useAuthStore = defineStore('auth', () => {
         isLoggedIn, authHeader,
         loadToken, fetchUser, register, login, logout, fetchMyTickets, fetchEvents,
         buyTicket, fetchListings, listTicketForSale, buyListedTicket, cancelListing, 
-        updateWalletPreferenceAPI
+        updateWalletPreferenceAPI, isAdmin
     };
 });

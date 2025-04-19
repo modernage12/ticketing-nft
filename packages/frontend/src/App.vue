@@ -38,13 +38,14 @@ onMounted(() => {
   <div class="app-container">
     <header class="app-header">
       <div class="logo">
-        Ticketing NFT </div>
+        AMPHI </div>
       <nav class="navigation">
         <template v-if="authStore.isLoggedIn">
           <RouterLink to="/events">Eventi</RouterLink>
           <RouterLink to="/my-tickets">I Miei Biglietti</RouterLink>
           <RouterLink to="/marketplace">Marketplace</RouterLink>
           <RouterLink to="/settings">Impostazioni</RouterLink>
+          <RouterLink v-if="authStore.isLoggedIn && authStore.isAdmin" to="/create-event">Crea Evento</RouterLink>
           <button @click="handleLogout" class="logout-button">Logout ({{ authStore.user?.username }})</button>
           </template>
 

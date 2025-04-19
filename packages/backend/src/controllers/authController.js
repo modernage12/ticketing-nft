@@ -1,6 +1,7 @@
 const userService = require('../services/userService');
 const jwt = require('jsonwebtoken'); // Lo useremo magari dopo per il login
 const bcrypt = require('bcrypt');
+const { pool } = require('../config/db'); 
 
 const registerUser = async (req, res) => {
     const { username, password } = req.body;
@@ -66,7 +67,7 @@ const loginUser = async (req, res) => {
             username: user.username,
             walletAddress: user.wallet_address, // Indirizzo wallet interno
             walletPreference: user.wallet_preference, // Includi la preferenza nel payload del token
-            role: user.role
+            isAdmin: user.isAdmin
         };
 
         const jwtSecret = process.env.JWT_SECRET;
@@ -88,7 +89,8 @@ const loginUser = async (req, res) => {
                 userId: user.user_id,
                 username: user.username,
                 walletAddress: user.wallet_address, // Indirizzo wallet interno
-                walletPreference: user.wallet_preference // --> AGGIUNTO: La preferenza letta dal DB
+                walletPreference: user.wallet_preference, // --> AGGIUNTO: La preferenza letta dal DB
+                isAdmin: user.is_admin
             }
         });
 
@@ -99,15 +101,37 @@ const loginUser = async (req, res) => {
 };
 
 // === NUOVA FUNZIONE PER OTTENERE UTENTE CORRENTE ===
-const getCurrentUser = (req, res) => {
-    // Il middleware 'protect' ha già verificato il token
-    // e messo i dati utente in req.user
-    if (req.user) {
-        res.status(200).json(req.user); // Restituisce i dati dal token
-    } else {
-        // Questo non dovrebbe accadere se il middleware funziona
-        res.status(401).json({ error: 'Utente non trovato nel token.' });
+const getCurrentUser = async (req, res) => {
+    if (!req.user || !req.user.userId) {
+        return res.status(401).json({ error: 'Token non valido o utente non identificato.' });
     }
+    const userId = req.user.userId;
+
+    try { // <-- Blocco try INIZIA qui
+        // Query diretta al DB
+        const userResult = await pool.query(
+            'SELECT user_id, username, wallet_address, wallet_preference, is_admin FROM users WHERE user_id = $1',
+            [userId]
+        );
+        const userFromDb = userResult.rows[0];
+
+        if (!userFromDb) {
+            return res.status(404).json({ error: 'Utente non trovato nel database.' });
+        }
+
+        // Costruisci la risposta JSON
+        res.status(200).json({
+            userId: userFromDb.user_id,
+            username: userFromDb.username,
+            walletAddress: userFromDb.wallet_address,
+            walletPreference: userFromDb.wallet_preference,
+            isAdmin: userFromDb.is_admin
+        });
+
+    } catch (error) { // <-- Blocco catch per gestire errori della query
+        console.error("Errore in getCurrentUser (/me):", error);
+        res.status(500).json({ error: error.message || 'Errore interno del server recuperando i dati utente.' });
+    } 
 };
 
 const updateUserPreferences = async (req, res) => {

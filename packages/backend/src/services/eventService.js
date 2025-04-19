@@ -1,6 +1,7 @@
 const { pool } = require('../config/db');
 const { provider, ticketNFTContract } = require('../config/ethers');
 const { ethers } = require('ethers');
+const db = require('../config/db');
 
 // Chiave privata del wallet che può mintare
 const minterPrivateKey = process.env.PRIVATE_KEY;
@@ -14,6 +15,63 @@ try {
      console.error("ERRORE CRITICO durante inizializzazione minterWallet:", error.message || error);
      process.exit(1);
 }
+
+const createEvent = async (eventData) => {
+    const {
+        name,
+        date,
+        location,
+        totalTickets,
+        availableTickets,
+        priceWei, // Già convertito in Wei (stringa) dal controller
+        description,
+        imageUrl
+        // createdByUserId // Se deciso di salvarlo
+    } = eventData;
+
+    // Definisci le colonne e i valori per l'inserimento
+    // name, description, date, location, original_price, total_tickets, tickets_minted
+    const query = `
+        INSERT INTO events (
+            name, date, location, total_tickets, original_price, description, image_url,
+            tickets_minted -- Aggiungiamo tickets_minted
+            /*, created_by_user_id */
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8 /*, $9 */)
+        RETURNING *;
+    `;
+    const values = [
+        name, date, location, totalTickets, priceWei, // priceWei va in original_price
+        description, imageUrl,
+        0 // <-- NUOVO: Valore iniziale per tickets_minted
+        /*, createdByUserId */
+    ];
+
+    try {
+        console.log("Executing DB query to create event:", query, values);
+        const result = await db.query(query, values);
+        console.log("DB query result:", result.rows[0]);
+
+        if (result.rows.length > 0) {
+            // Formatta l'output se necessario (es: converti price_wei da stringa a BigInt o Ether string)
+            // Per ora restituiamo i dati grezzi dal DB
+            const newEvent = result.rows[0];
+            // Potresti voler riconvertire price_wei in Ether per la risposta API, ma è meglio
+            // che il frontend gestisca la visualizzazione dei Wei se necessario.
+            // newEvent.priceEther = ethers.formatEther(newEvent.price_wei);
+            return newEvent;
+        } else {
+            throw new Error('Event creation failed, no rows returned.');
+        }
+    } catch (error) {
+        console.error('Database error creating event:', error);
+        // Potresti voler gestire errori specifici del DB (es: violazione UNIQUE constraint)
+        // if (error.code === '23505') { // Esempio: unique constraint violation
+        //     throw new Error('An event with this name/date already exists.');
+        // }
+        throw new Error('Database operation failed during event creation.'); // Errore generico
+    }
+};
 
 /**
  * Recupera tutti gli eventi dal database.
@@ -130,5 +188,6 @@ const mintTicketForUser = async (userId, userWalletAddress, eventId) => {
 
 module.exports = {
     getAllEvents,
-    mintTicketForUser
+    mintTicketForUser,
+    createEvent
 };

@@ -39,6 +39,16 @@ const router = createRouter({
   name: 'settings',
   component: SettingsView, // Usa il componente importato sopra
   meta: { requiresAuth: true } // Assicura che richieda autenticazione
+},
+
+{
+  path: '/create-event', // Il percorso URL
+  name: 'create-event', // Nome univoco della route
+  component: () => import('../views/CreateEventView.vue'), // Il componente Vue (verrà creato dopo)
+  meta: {
+      requiresAuth: true, // Richiede che l'utente sia loggato
+      requiresAdmin: true // Richiede che l'utente sia admin
+  }
 }
 
   ]
@@ -57,6 +67,54 @@ router.beforeEach((to, from, next) => {
   } else {
     // Altrimenti, permetti la navigazione
     next();
+  }
+});
+
+router.beforeEach(async (to, from, next) => {
+  // Ottieni lo store Pinia QUI DENTRO, non fuori
+  const authStore = useAuthStore();
+
+  // Assicurati che lo stato auth sia stato inizializzato se c'è un token
+  // Questo è importante se l'utente ricarica la pagina
+  if (authStore.token && !authStore.user) {
+      console.log('Router Guard: Token presente ma user non caricato, chiamo fetchUser...');
+      await authStore.fetchUser(); // Aspetta che i dati utente siano caricati
+      console.log('Router Guard: fetchUser completato.');
+  }
+
+
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+  const requiresGuest = to.matched.some(record => record.meta.requiresGuest);
+
+  const isAuthenticated = authStore.isLoggedIn; // Usa il computed getter
+  const isAdmin = authStore.isAdmin; // Usa il computed getter (se lo hai aggiunto) o authStore.user?.isAdmin
+
+  console.log(`Router Guard: Navigating to ${to.path}`);
+  console.log(`Router Guard: requiresAuth=<span class="math-inline">\{requiresAuth\}, requiresAdmin\=</span>{requiresAdmin}, requiresGuest=${requiresGuest}`);
+  console.log(`Router Guard: isAuthenticated=<span class="math-inline">\{isAuthenticated\}, isAdmin\=</span>{isAdmin}`);
+
+  if (requiresAuth && !isAuthenticated) {
+      // Se la route richiede login ma l'utente non è loggato -> vai al login
+      console.log('Router Guard: Accesso negato (non autenticato), redirect a /login');
+      next({
+           name: 'login',
+           // Opzionale: conserva la pagina richiesta per redirect dopo login
+           query: { redirect: to.fullPath }
+      });
+  } else if (requiresAdmin && !isAdmin) {
+      // Se la route richiede admin ma l'utente non è admin -> vai a una pagina sicura (es: my-tickets)
+      console.log('Router Guard: Accesso negato (non admin), redirect a /my-tickets');
+      next({ name: 'my-tickets' }); // O alla home, o a una pagina 'Forbidden'
+  } else if (requiresGuest && isAuthenticated) {
+       // Se la route richiede "ospite" (non loggato) ma l'utente è loggato -> vai a my-tickets
+       console.log('Router Guard: Accesso negato (autenticato, pagina solo guest), redirect a /my-tickets');
+       next({ name: 'my-tickets' }); // O alla home
+  }
+   else {
+      // Tutto ok, procedi con la navigazione
+      console.log('Router Guard: Accesso consentito.');
+      next();
   }
 });
 

@@ -40,6 +40,7 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/internal', internalRoutes);
+app.use('/api/events', eventRoutes);
 
 // 7. Route di base (opzionale)
 app.get('/', (req, res) => {
