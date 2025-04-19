@@ -1,7 +1,6 @@
 const { pool } = require('../config/db');
 const { provider, ticketNFTContract } = require('../config/ethers');
 const { ethers } = require('ethers');
-const db = require('../config/db');
 
 // Chiave privata del wallet che può mintare
 const minterPrivateKey = process.env.PRIVATE_KEY;
@@ -49,7 +48,7 @@ const createEvent = async (eventData) => {
 
     try {
         console.log("Executing DB query to create event:", query, values);
-        const result = await db.query(query, values);
+        const result = await pool.query(query, values); // <-- MODIFICATA: usa 'pool'
         console.log("DB query result:", result.rows[0]);
 
         if (result.rows.length > 0) {

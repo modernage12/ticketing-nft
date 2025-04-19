@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { ethers } from 'ethers'; // Per formattare il prezzo
+import { formatEther } from 'ethers';
 
 const authStore = useAuthStore();
 
@@ -72,7 +73,7 @@ const currentUserWalletAddress = computed(() => authStore.user?.walletAddress);
         <p><strong>Descrizione:</strong> {{ event.description || 'N/D' }}</p>
         <p><strong>Data:</strong> {{ formatDate(event.date) }}</p>
         <p><strong>Luogo:</strong> {{ event.location || 'N/D' }}</p>
-        <p><strong>Prezzo:</strong> {{ formatPrice(event.original_price) }} Unità</p>
+        <p><strong>Prezzo:</strong> {{ formatEther(event.original_price || '0') }} MATIC</p>
         <p><strong>Disponibili:</strong> {{ event.total_tickets - event.tickets_minted }} / {{ event.total_tickets }}</p>
 
         <button

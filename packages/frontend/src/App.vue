@@ -78,7 +78,7 @@ onMounted(() => {
     </main>
 
     <footer class="app-footer">
-      <p>&copy; 2025 Ticketing NFT Project</p>
+      <p>&copy; 2025 AMPHI</p>
     </footer>
   </div>
 </template>

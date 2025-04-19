@@ -45,3 +45,13 @@ Ti ho fornito nuovamente le modifiche per App.vue (import store, uso store, UI w
 [2025-04-18 22:18 CEST] - Rimozione Aggiornamento SIWE: Annullata l'implementazione di SIWE etc riportato i file e il progetto alle condizioni prima di Aggiornamento SIWE & DB.
 [2025-04-18 22:28 CEST] - Bugfix Login: Risolto problema login standard non funzionante reinserendo la funzione handleLogin mancante nel componente LoginView.vue. Login username/password ora funzionante.
 [2025-04-19 10:32 CEST] - Feature Creazione Eventi: Aggiunto ruolo admin (colonna `is_admin` su `users` DB) e middleware di autorizzazione (`adminAuthMiddleware.js`). Aggiornata API login per restituire stato admin.
+[2025-04-19 11:37 CEST] - Bugfix Creazione Eventi: Corretto percorso di import per l'istanza Axios in CreateEventView.vue (da @/services/api a @/axios-config).
+[2025-04-19 11:42 CEST] - Bugfix Backend: Corretto l'uso dell'oggetto pool del database in adminAuthMiddleware.js per risolvere TypeError: db.query is not a function.
+[2025-04-19 11:47 CEST] - Debug Creazione Eventi: Riscontrato errore 400 Bad Request dal backend con messaggio "Missing required event fields". Iniziata verifica middleware express.json, nomi campi payload e logica controller backend.
+[2025-04-19 11:50 CEST] - Bugfix Creazione Eventi: Corretta discrepanza nome campo tra frontend (total_tickets) e backend (totalTickets) per risolvere errore 400 Bad Request. Modificato frontend per inviare totalTickets.
+[2025-04-19 11:53 CEST] - Debug Creazione Eventi: Riscontrato nuovo errore TypeError: db.query is not a function in eventService.js. Causa identificata come import/uso errato del pool DB.
+[2025-04-19 11:58 CEST] - Debug Creazione Eventi: Riscontrato errore DB colonna "image_url" non esiste. Identificata discrepanza tra query INSERT in eventService.js e schema tabella events. Proposte opzioni: aggiungere colonna al DB o rimuoverla dalla query.
+[2025-04-19 12:04 CEST] - Fix Creazione Eventi: Corretto messaggio di successo in CreateEventView.vue per usare response.data.event.name e response.data.event.event_id.
+[2025-04-19 12:04 CEST] - Feature Creazione Eventi: Aggiunto campo "Descrizione" al form e alla logica di CreateEventView.vue.
+[2025-04-19 12:11 CEST] - Fix Visualizzazione Prezzi: Modificato EventsView.vue per usare ethers.formatEther e mostrare i prezzi degli eventi (letti da original_price in Wei) correttamente in MATIC.
+[2025-04-19 12:17 CEST] - Feature Creazione Eventi: Completata implementazione e debugging end-to-end. Funzionalità confermata.

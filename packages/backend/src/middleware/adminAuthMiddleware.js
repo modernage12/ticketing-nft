@@ -1,7 +1,7 @@
 // packages/backend/src/middleware/adminAuthMiddleware.js
 // --- INIZIO BLOCCO NUOVO ---
 const jwt = require('jsonwebtoken');
-const db = require('../config/db'); // Assicurati che il path sia corretto per il tuo setup
+const { pool } = require('../config/db'); // Assicurati che il path sia corretto per il tuo setup
 
 const adminAuthMiddleware = async (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -15,7 +15,7 @@ const adminAuthMiddleware = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // Recupera l'utente E il suo stato di admin
-        const userResult = await db.query('SELECT id, username, is_admin FROM users WHERE id = $1', [decoded.userId]);
+        const userResult = await pool.query('SELECT user_id, username, is_admin FROM users WHERE user_id = $1', [decoded.userId]);
         const user = userResult.rows[0];
 
         if (!user) {

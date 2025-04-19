@@ -2,6 +2,7 @@ const eventService = require('../services/eventService');
 const ethers = require('ethers');
 
 const createEvent = async (req, res) => {
+    console.log('Dati ricevuti dal frontend:', req.body);
     console.log('Create Event Controller called by user:', req.user); // req.user viene da adminAuthMiddleware
     try {
         // 1. Estrai i dati dal corpo della richiesta
