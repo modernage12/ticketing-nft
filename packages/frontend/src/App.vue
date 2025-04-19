@@ -45,7 +45,7 @@ onMounted(() => {
           <RouterLink to="/my-tickets">I Miei Biglietti</RouterLink>
           <RouterLink to="/marketplace">Marketplace</RouterLink>
           <RouterLink to="/settings">Impostazioni</RouterLink>
-          <RouterLink v-if="authStore.isLoggedIn && authStore.isAdmin" to="/create-event">Crea Evento</RouterLink>
+          <RouterLink v-if="authStore.isLoggedIn && (authStore.isAdmin || authStore.isCreator)" to="/create-event">Crea Evento</RouterLink>
           <button @click="handleLogout" class="logout-button">Logout ({{ authStore.user?.username }})</button>
           </template>
 

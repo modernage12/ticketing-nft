@@ -13,6 +13,7 @@ export const useAuthStore = defineStore('auth', () => {
     const user = ref(null);
     const error = ref(null); // Errore generico per azioni principali
     const loading = ref(false); // Loading generico per azioni principali
+    const isCreator = ref(false); // Stato per memorizzare se l'utente è creator
     const router = useRouter();
     const walletStore = useWalletStore();
     // URLs API Backend
@@ -100,6 +101,11 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             const response = await axios.get(`${AUTH_API_URL}/me`, authHeader.value);
             user.value = response.data;
+            isCreator.value = user.value.isCreator;
+            console.log(
+                'AuthStore: fetchUser - Dati ricevuti:', JSON.stringify(response.data), // Logga tutta la risposta
+                'isCreator impostato a:', isCreator.value // Logga il valore nello store
+            );
             console.log("AuthStore: Dati utente recuperati OK:", JSON.stringify(user.value));
             if (user.value && user.value.walletPreference) {
                 walletStore.initializePreference(user.value.walletPreference);
@@ -122,11 +128,11 @@ export const useAuthStore = defineStore('auth', () => {
      }
 
     // Registrazione nuovo utente
-    async function register(username, password) {
+    async function register(username, password, registerAsCreator) {
         console.log("AuthStore: register ACTION CALLED");
         loading.value = true; error.value = null;
         try {
-            await axios.post(`${AUTH_API_URL}/register`, { username, password });
+            await axios.post(`${AUTH_API_URL}/register`, { username, password, registerAsCreator });
             console.log("AuthStore: Registrazione OK, redirect a login...");
             await router.push('/login');
         } catch (err) {
@@ -178,6 +184,7 @@ export const useAuthStore = defineStore('auth', () => {
         listings.value = []; events.value = []; localStorage.removeItem('authToken');
         error.value = null; eventsError.value = null; listingsError.value = null; myTicketsError.value = null;
         eventsLoading.value = false; listingsLoading.value = false; myTicketsLoading.value = false; loading.value = false;
+        isCreator.value = false;
         await router.push('/login');
     }
 
@@ -334,6 +341,6 @@ export const useAuthStore = defineStore('auth', () => {
         isLoggedIn, authHeader,
         loadToken, fetchUser, register, login, logout, fetchMyTickets, fetchEvents,
         buyTicket, fetchListings, listTicketForSale, buyListedTicket, cancelListing, 
-        updateWalletPreferenceAPI, isAdmin
+        updateWalletPreferenceAPI, isAdmin, isCreator
     };
 });

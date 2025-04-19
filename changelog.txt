@@ -55,3 +55,17 @@ Ti ho fornito nuovamente le modifiche per App.vue (import store, uso store, UI w
 [2025-04-19 12:04 CEST] - Feature Creazione Eventi: Aggiunto campo "Descrizione" al form e alla logica di CreateEventView.vue.
 [2025-04-19 12:11 CEST] - Fix Visualizzazione Prezzi: Modificato EventsView.vue per usare ethers.formatEther e mostrare i prezzi degli eventi (letti da original_price in Wei) correttamente in MATIC.
 [2025-04-19 12:17 CEST] - Feature Creazione Eventi: Completata implementazione e debugging end-to-end. Funzionalità confermata.
+[2025-04-19 ~12:25 CEST] - Feature Ruolo Creator: Aggiunta colonna `is_creator` (BOOLEAN DEFAULT false NOT NULL) a tabella `users` nel DB PostgreSQL.
+[2025-04-19 ~12:27 CEST] - Feature Ruolo Creator: Rinominato middleware `adminAuthMiddleware.js` in `eventMgmtAuthMiddleware.js`. Modificato per selezionare `is_creator` dal DB e permettere accesso se `user.is_admin` O `user.is_creator`. Aggiunto `isCreator` a `req.user`.
+[2025-04-19 ~12:28 CEST] - Feature Ruolo Creator: Aggiornata route `POST /api/events` in `eventRoutes.js` per usare il nuovo middleware `eventMgmtAuthMiddleware`.
+[2025-04-19 ~12:30 CEST] - Feature Ruolo Creator: Aggiornata API `POST /api/auth/login` (in `authController.js`) per includere lo stato `is_creator` nel payload del JWT e nell'oggetto `user` della risposta JSON.
+[2025-04-19 ~13:23 CEST] - Bugfix Backend: Corretto endpoint `GET /api/auth/me` (in `authController.js`) per recuperare dal DB e restituire correttamente lo stato `is_creator` dell'utente nella risposta JSON.
+[2025-04-19 ~13:25 CEST] - Feature Ruolo Creator: Aggiornato store Pinia `stores/auth.js`: aggiunto stato `isCreator`, modificata azione `WorkspaceUser` per salvarlo, resettato in `logout`, esposto dallo store.
+[2025-04-19 ~13:28 CEST] - Feature Ruolo Creator: Consolidato e corretto router guard (`router/index.js`) in un unico `beforeEach`. Modificata logica per rotte `meta.requiresAdmin` per consentire accesso se `authStore.isAdmin` O `authStore.isCreator`.
+[2025-04-19 ~13:30 CEST]` - Fix UI: Aggiornato `v-if` per link/pulsante "Crea Evento" (in `App.vue` o navbar) per mostrarlo se `authStore.isLoggedIn && (authStore.isAdmin || authStore.isCreator)`.
+[2025-04-19 ~13:35 CEST] - Feature Registrazione Creator: Aggiunta checkbox "Registrati come Organizzatore" in `RegisterView.vue` e aggiornata logica `handleRegister` per inviare il flag.
+[2025-04-19 ~13:35 CEST] - Feature Registrazione Creator: Modificata API `POST /api/auth/register` (in `authController.js`) per accettare flag `registerAsCreator`.
+[2025-04-19 ~13:35 CEST] - Feature Registrazione Creator: Modificata azione `register` in `authStore` per inviare il flag `registerAsCreator` al backend.
+[2025-04-19 ~13:48 CEST] - Bugfix Backend: Risolto `ReferenceError: authService is not defined` in `authController.js` aggiungendo l'import mancante per il service corretto (`userService.js`).
+[2025-04-19 ~13:51 CEST]` - Bugfix Backend: Corretta query `INSERT` in `userService.createUser` per includere colonne/placeholders/valori mancanti (`is_admin`, `is_creator`, `wallet_preference`) e risolvere errore mismatch parametri (`bind message provides 5 parameters, but prepared statement "" requires 4`).
+[2025-04-19 ~13:53 CEST]` - Feature Registrazione Creator: Completata implementazione e test della registrazione utente con opzione Creator.

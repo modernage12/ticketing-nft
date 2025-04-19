@@ -54,68 +54,76 @@ const router = createRouter({
   ]
 })
 
-// Navigation Guard - Eseguito prima di ogni navigazione
-router.beforeEach((to, from, next) => {
-  const authStore = useAuthStore(); // Ottieni lo store
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth); // La rotta richiede auth?
-
-  // Se la rotta richiede auth E l'utente NON è loggato
-  if (requiresAuth && !authStore.isLoggedIn) {
-    console.log('Navigation Guard: Bloccato accesso, redirect a login');
-    // Reindirizza alla pagina di login
-    next({ name: 'login' });
-  } else {
-    // Altrimenti, permetti la navigazione
-    next();
-  }
-});
-
+// Navigation Guard - UNICO E CORRETTO
 router.beforeEach(async (to, from, next) => {
-  // Ottieni lo store Pinia QUI DENTRO, non fuori
-  const authStore = useAuthStore();
+  const authStore = useAuthStore(); // Ottieni lo store
+  console.log(`Router Guard: Navigando verso ${to.fullPath} da ${from.fullPath}`);
 
+  // --- 1. Caricamento Dati Utente (se necessario) ---
   // Assicurati che lo stato auth sia stato inizializzato se c'è un token
-  // Questo è importante se l'utente ricarica la pagina
   if (authStore.token && !authStore.user) {
       console.log('Router Guard: Token presente ma user non caricato, chiamo fetchUser...');
-      await authStore.fetchUser(); // Aspetta che i dati utente siano caricati
-      console.log('Router Guard: fetchUser completato.');
+      try {
+          await authStore.fetchUser(); // Aspetta che i dati utente siano caricati
+          console.log('Router Guard: fetchUser completato. User:', authStore.user?.username, 'isAdmin:', authStore.isAdmin, 'isCreator:', authStore.isCreator);
+      } catch (error) {
+           console.error('Router Guard: Errore durante fetchUser. Potrebbe impedire accesso a rotte protette.', error);
+           // Lasciamo che i controlli successivi gestiscano l'eventuale mancanza di auth/permessi
+      }
   }
 
-
+  // --- 2. Recupera Metadati Rotta e Stato Autenticazione ---
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
-  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin); // Usiamo questo per /create-event
   const requiresGuest = to.matched.some(record => record.meta.requiresGuest);
+  const isAuthenticated = authStore.isLoggedIn;
+  const isAdmin = authStore.isAdmin;
+  const isCreator = authStore.isCreator; // Assumendo che authStore lo esponga correttamente
 
-  const isAuthenticated = authStore.isLoggedIn; // Usa il computed getter
-  const isAdmin = authStore.isAdmin; // Usa il computed getter (se lo hai aggiunto) o authStore.user?.isAdmin
+  console.log(`Router Guard: Meta { requiresAuth: ${requiresAuth}, requiresAdmin: ${requiresAdmin}, requiresGuest: ${requiresGuest} }`);
+  console.log(`Router Guard: Stato { isAuthenticated: ${isAuthenticated}, isAdmin: ${isAdmin}, isCreator: ${isCreator} }`);
 
-  console.log(`Router Guard: Navigating to ${to.path}`);
-  console.log(`Router Guard: requiresAuth=<span class="math-inline">\{requiresAuth\}, requiresAdmin\=</span>{requiresAdmin}, requiresGuest=${requiresGuest}`);
-  console.log(`Router Guard: isAuthenticated=<span class="math-inline">\{isAuthenticated\}, isAdmin\=</span>{isAdmin}`);
+  // --- 3. Logica di Controllo Accesso ---
 
+  // Caso 1: Rotta richiede Autenticazione, ma utente non è loggato
   if (requiresAuth && !isAuthenticated) {
-      // Se la route richiede login ma l'utente non è loggato -> vai al login
-      console.log('Router Guard: Accesso negato (non autenticato), redirect a /login');
+      console.log('Router Guard: Accesso negato (Non Autenticato). Redirect a /login.');
       next({
            name: 'login',
-           // Opzionale: conserva la pagina richiesta per redirect dopo login
-           query: { redirect: to.fullPath }
+           query: { redirect: to.fullPath } // Opzionale: ricorda dove voleva andare
       });
-  } else if (requiresAdmin && !isAdmin) {
-      // Se la route richiede admin ma l'utente non è admin -> vai a una pagina sicura (es: my-tickets)
-      console.log('Router Guard: Accesso negato (non admin), redirect a /my-tickets');
-      next({ name: 'my-tickets' }); // O alla home, o a una pagina 'Forbidden'
-  } else if (requiresGuest && isAuthenticated) {
-       // Se la route richiede "ospite" (non loggato) ma l'utente è loggato -> vai a my-tickets
-       console.log('Router Guard: Accesso negato (autenticato, pagina solo guest), redirect a /my-tickets');
-       next({ name: 'my-tickets' }); // O alla home
+      return; // Interrompi esecuzione
   }
-   else {
-      // Tutto ok, procedi con la navigazione
-      console.log('Router Guard: Accesso consentito.');
-      next();
+
+  // Caso 2: Rotta richiede accesso Ospite (non loggato), ma utente è loggato
+  if (requiresGuest && isAuthenticated) {
+      console.log('Router Guard: Accesso negato (Autenticato su rotta Guest). Redirect a /events.');
+      next('/events'); // O un'altra pagina di default per utenti loggati
+      return; // Interrompi esecuzione
   }
+
+  // Caso 3: Rotta richiede privilegi Admin/Creator (usiamo meta.requiresAdmin per questo)
+  if (requiresAdmin) {
+      // Questo controllo isAuthenticated è tecnicamente ridondante se requiresAdmin implica requiresAuth,
+      // ma è una sicurezza in più. Se non fosse autenticato, sarebbe già stato gestito dal Caso 1.
+      if (!isAuthenticated) {
+           console.log('Router Guard: Accesso negato (Non Autenticato per rotta Admin/Creator). Redirect a /login.');
+           next('/login');
+           return;
+      }
+      // Qui l'utente è autenticato, controlliamo i ruoli:
+      if (!isAdmin && !isCreator) { // <-- CONDIZIONE CORRETTA
+          console.error(`Router Guard: Accesso negato (Privilegi Insufficienti) a ${to.fullPath}. Stato: isAdmin=${isAdmin}, isCreator=${isCreator}`);
+          next('/'); // Reindirizza alla home (o pagina 'Accesso Negato')
+          return; // Interrompi esecuzione
+      }
+       console.log(`Router Guard: Accesso Admin/Creator consentito a ${to.fullPath}.`);
+  }
+
+  // --- 4. Accesso Consentito ---
+  // Se siamo arrivati fin qui, nessun controllo ha bloccato la navigazione
+  console.log(`Router Guard: Accesso consentito a ${to.fullPath}. Chiamo next().`);
+  next();
 });
 
 export default router

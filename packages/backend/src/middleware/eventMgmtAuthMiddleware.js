@@ -3,7 +3,7 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../config/db'); // Assicurati che il path sia corretto per il tuo setup
 
-const adminAuthMiddleware = async (req, res, next) => {
+const eventMgmtAuthMiddleware = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ message: 'Authorization token required' });
@@ -15,7 +15,10 @@ const adminAuthMiddleware = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // Recupera l'utente E il suo stato di admin
-        const userResult = await pool.query('SELECT user_id, username, is_admin FROM users WHERE user_id = $1', [decoded.userId]);
+        const userResult = await pool.query(
+            'SELECT user_id, username, is_admin, is_creator FROM users WHERE user_id = $1',
+            [userId]
+        );
         const user = userResult.rows[0];
 
         if (!user) {
@@ -23,10 +26,10 @@ const adminAuthMiddleware = async (req, res, next) => {
             return res.status(401).json({ message: 'User not found for provided token' });
         }
 
-        // Verifica cruciale: l'utente è admin?
-        if (!user.is_admin) {
-            // Non è admin, accesso negato alla risorsa protetta
-            return res.status(403).json({ message: 'Forbidden: Admin privileges required' });
+        // Verifica cruciale: l'utente è admin OPPURE creator?
+        if (!user.is_admin && !user.is_creator) {
+            // Non è né admin né creator, accesso negato (403 Forbidden)
+            return res.status(403).json({ message: 'Forbidden: Admin or Creator privileges required' });
         }
 
         // Utente trovato ed è admin. Allega info utili alla request per uso successivo
@@ -48,5 +51,5 @@ const adminAuthMiddleware = async (req, res, next) => {
     }
 };
 
-module.exports = adminAuthMiddleware;
+module.exports = eventMgmtAuthMiddleware;
 // --- FINE BLOCCO NUOVO ---

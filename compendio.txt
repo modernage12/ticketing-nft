@@ -1,0 +1,251 @@
+COMPENDIO PROGETTO: Ticketing NFT MVP
+
+(Stato Aggiornato: Sabato 19 Aprile 2025, ~12:21 CEST - Altamura, Italia)
+
+1. Informazioni Generali e Obiettivi
+
+Nome Progetto: Ticketing NFT MVP
+Obiettivo Primario MVP: Realizzare una piattaforma demo funzionante per la vendita primaria (minting) e secondaria (marketplace P2P) di biglietti NFT per eventi. La piattaforma deve implementare meccanismi anti-scalping basilari (price cap nel marketplace) e offrire un'esperienza utente (UX) semplice e intuitiva.
+Target Primario: Demo Funzionante / Ricerca Finanziamenti Iniziali (Seed).
+Sviluppatore Principale: Lorenzo (Altamura/Bari).
+Contesto Attuale: Questo compendio serve come punto di riferimento aggiornato per continuare lo sviluppo in modo efficiente, consolidando le informazioni dalle sessioni precedenti.
+2. Repository GitHub e Riferimento Changelog
+
+Repository: Il codice sorgente completo del progetto è disponibile su GitHub:
+https://github.com/modernage12/ticketing-nft/tree/main
+Changelog Dettagliato: Per una cronologia dettagliata delle modifiche, implementazioni e decisioni prese durante lo sviluppo, fare riferimento al file changelog.txt presente nel repository (o fornito separatamente).   
+3. Stack Tecnologico e Setup Ambiente
+
+Architettura: Monorepo gestito con npm workspaces.
+packages/contracts: Smart Contracts Solidity.
+packages/backend: API Server Node.js/Express.
+packages/frontend: Applicazione Web Vue.js.
+Ambiente Sviluppo Locale:
+OS: Windows 10/11.
+Node.js: v22.14.0 (o versione LTS compatibile).
+Package Manager: npm.
+Database Locale: PostgreSQL (versione recente).
+Smart Contracts (packages/contracts):
+Linguaggio: Solidity (versione >=0.8.0).
+Framework: Hardhat (v2.23.0).
+Librerie: OpenZeppelin Contracts v5.3.0 (installate manualmente, non via npm nel monorepo principale per semplicità iniziale).
+Testnet: Polygon Amoy.
+RPC Provider (per Deploy/Interazioni dirette): Infura (endpoint Amoy configurato in .env del backend).
+Indirizzi Deployati (Amoy - Esempio):
+TicketNFT.sol: 0x1Ce... (Verificare l'indirizzo attuale se necessario).
+Marketplace.sol: 0xAec... (Verificare l'indirizzo attuale se necessario).
+Backend (packages/backend):
+Framework: Node.js / Express.
+Database: PostgreSQL con client pg.
+Interazione Blockchain: Ethers.js v6.
+Autenticazione: jsonwebtoken (JWT), bcrypt (hashing password).
+Middleware: cors, express.json.
+Configurazione: dotenv (per variabili d'ambiente come DATABASE_URL, JWT_SECRET, INFURA_AMOY_URL, PRIVATE_KEY del minter).
+Gestione Chiavi Utente: Custodial Ibrido. Le chiavi private degli utenti che non usano un wallet esterno sono generate dal backend, criptate con AES-GCM (usando una chiave derivata dalla password utente o una chiave dedicata) e salvate nella tabella Users. Gli utenti possono opzionalmente collegare un wallet esterno (MetaMask).
+Frontend (packages/frontend):
+Framework: Vue.js 3 (Composition API preferita).
+Build Tool: Vite.
+Routing: Vue Router.
+State Management: Pinia (authStore, walletStore, eventStore, etc.).
+Chiamate API: Axios (istanza configurata axios-config.js).
+Interazione Blockchain: Ethers.js v6 (principalmente per utilità di formattazione come formatEther e per interazione con wallet esterno via window.ethereum).
+4. Architettura Generale (Monorepo, Flusso Dati)
+
+Monorepo: Permette di gestire codice interdipendente (contratti usati dal backend, tipi condivisi potenzialmente) in un unico repository. L'installazione delle dipendenze e l'esecuzione degli script avviene dalla root del progetto.
+Flusso Utente Base (Wallet Interno):
+Utente si registra/logga (Frontend -> Backend API Auth). Il backend genera/recupera la chiave privata criptata.
+Utente visualizza eventi (Frontend -> Backend API Eventi -> DB).
+Utente acquista biglietto (Frontend -> Backend API Eventi/Tickets).
+Il Backend verifica disponibilità (DB).
+Il Backend usa la chiave privata del minter (da .env) per chiamare mintTicket sullo Smart Contract TicketNFT, passando l'indirizzo del wallet dell'utente (recuperato/decriptato dal DB).
+Il Backend aggiorna DB (Tickets, Events).
+Utente visualizza "I Miei Biglietti" (Frontend -> Backend API Tickets -> DB Tickets + letture on-chain occasionali per status listing).
+Utente mette in vendita biglietto (Frontend -> Backend API Marketplace).
+Backend verifica proprietà (DB/on-chain).
+Backend usa chiave utente (decriptata) per chiamare approve su TicketNFT (per Marketplace) e listTicket su Marketplace.
+Backend aggiorna DB (Listings).
+Altro utente visualizza Marketplace (Frontend -> Backend API Marketplace -> DB Listings).
+Altro utente acquista biglietto P2P (Frontend -> Backend API Marketplace).
+Backend verifica listing, prezzo (vs price cap).
+Backend usa chiave acquirente (decriptata) per chiamare buyTicket su Marketplace.
+Backend aggiorna DB (Listings, Tickets).
+Flusso Wallet Esterno: L'utente collega MetaMask. Il frontend gestisce la connessione e ottiene l'indirizzo. Per azioni che richiedono firma (List/Buy/Cancel nel marketplace), il frontend dovrebbe costruire la transazione e chiedere la firma via MetaMask, inviando poi la transazione firmata o l'hash al backend per monitoraggio/aggiornamento DB (questa parte è meno sviluppata rispetto al flusso custodial). L'acquisto primario potrebbe ancora avvenire via backend (minting sull'indirizzo esterno dell'utente), ma la vendita/acquisto P2P richiederebbe interazione diretta o firme EIP-712 gestite dal backend. L'MVP attuale si concentra sul flusso custodial/ibrido semplice.
+Cache DB Manuale: Per migliorare le performance percepite e ridurre le chiamate RPC (specialmente su Infura gratuito), le letture principali (eventi, biglietti posseduti, listing marketplace) avvengono primariamente dal database PostgreSQL del backend. Le tabelle vengono aggiornate dal backend dopo il successo delle transazioni on-chain (minting, listing, buy, cancel). Questo introduce un potenziale ritardo o discrepanza tra stato on-chain e stato mostrato, accettato come compromesso per l'MVP.
+5. Smart Contracts (Dettagli)
+
+TicketNFT.sol (packages/contracts/contracts/TicketNFT.sol)
+Standard: ERC721 (probabilmente ERC721Enumerable per tracciare i token di un utente).
+Ownership: Ownable (probabilmente con owner inizialmente impostato all'indirizzo del deployer/admin).
+Minting: Funzione mintTicket(toAddress, eventId, originalPrice) chiamata solo da un indirizzo autorizzato (es. Minter/Backend Wallet, gestito via modifier onlyOwner o ruolo specifico).
+Metadati: Mappa ticketData(tokenId => TicketInfo) dove TicketInfo è una struct contenente eventId, originalPrice, ecc.
+ID Token: Contatore auto-incrementante.
+Marketplace.sol (packages/contracts/contracts/Marketplace.sol)
+Logica Core:
+listTicket(tokenId, price): Richiede approve precedente su TicketNFT. Registra il listing (struct Listing mappata tokenId => Listing). Emette evento TicketListed.
+buyTicket(tokenId): Richiede msg.value >= listing.price. Trasferisce MATIC al venditore, trasferisce NFT (safeTransferFrom) all'acquirente. Gestisce il price cap (require(listing.price <= ticketData[tokenId].originalPrice)). Rimuove listing. Emette evento TicketSold.
+cancelListing(tokenId): Chiamabile solo dal venditore (listing.seller). Rimuove listing. Emette evento ListingCancelled.
+Price Cap: Implementato nel buyTicket (o listTicket) per prevenire vendita a prezzo superiore all'originale.
+Eventi: Fondamentali per il monitoraggio off-chain (anche se non usati attivamente dalla cache DB manuale attuale).
+6. Backend (Dettagli API, DB, Servizi)
+
+API Endpoints Principali (packages/backend/src/routes/)
+/api/auth: /register, /login. Gestisce creazione utente (con wallet interno), login (restituisce JWT e preferenza wallet), potenziale recupero wallet.
+/api/events:
+GET /: Recupera tutti gli eventi (da DB).
+POST /: Crea un nuovo evento (solo Admin). Richiede adminAuthMiddleware.
+POST /:eventId/buy: Acquista (minta) un biglietto per l'evento specificato (richiede auth utente).
+/api/tickets:
+GET /my-tickets: Recupera i biglietti posseduti dall'utente loggato (da DB Tickets). Può includere check on-chain (lento/fallibile) per status isListed.
+/api/marketplace:
+GET /listings: Recupera i biglietti attualmente in vendita (da DB Listings).
+POST /list: Mette in vendita un biglietto posseduto. Richiede auth utente, tokenId, price.
+POST /buy: Acquista un biglietto listato. Richiede auth utente, listingId (o tokenId).
+POST /cancel: Annulla un listing. Richiede auth utente, listingId (o tokenId).
+/api/users (o in auth): Endpoint per aggiornare preferenza wallet (/update-preference).
+Database Schema (PostgreSQL - Principali Tabelle)
+users: user_id (PK, es. SERIAL o UUID), username (UNIQUE), password_hash, encrypted_private_key (TEXT/BYTEA, NULLable), wallet_address (indirizzo derivato da chiave privata), is_admin (BOOLEAN DEFAULT false), wallet_preference (TEXT DEFAULT 'internal', può essere 'external'), external_wallet_address (TEXT NULL UNIQUE, per SIWE futuro o riferimento).
+events: event_id (PK, SERIAL), name, description (TEXT), date (TIMESTAMP WITH TIME ZONE), location, original_price (NUMERIC), total_tickets (INTEGER), tickets_minted (INTEGER DEFAULT 0), image_url (TEXT NULL), created_at.
+tickets: ticket_id (PK, SERIAL), token_id (VARCHAR/NUMERIC, UNIQUE?), nft_contract_address, owner_wallet_address, owner_user_id (FK a users), event_id (FK a events), original_price (NUMERIC), issuance_date (TIMESTAMP), is_listed (BOOLEAN DEFAULT false), last_checked_block (INTEGER, per caching stato on-chain).
+listings: listing_id (PK, SERIAL), ticket_id (FK a tickets, UNIQUE?), token_id (VARCHAR/NUMERIC), seller_wallet_address, seller_user_id (FK a users), price (NUMERIC), listed_at (TIMESTAMP), is_active (BOOLEAN DEFAULT true).
+Servizi Principali (packages/backend/src/services/)
+authService: Logica per registrazione, login, gestione JWT, crittografia chiavi.
+eventService: Logica per creare eventi, recuperare eventi, mintare biglietti (interazione contratto TicketNFT, aggiornamento DB Events e Tickets).
+ticketService: Logica per recuperare biglietti utente.
+marketplaceService: Logica per listare, comprare, cancellare listing (interazione contratto Marketplace, aggiornamento DB Listings, Tickets).
+Middleware Chiave (packages/backend/src/middleware/)
+authMiddleware: Verifica token JWT per rotte protette standard. Allega req.user (con userId, walletAddress).
+adminAuthMiddleware: Verifica token JWT E flag is_admin nel DB per rotte admin. Allega req.user (con userId, username, isAdmin).
+7. Frontend (Dettagli UI, Store, Interazioni)
+
+Componenti Principali (packages/frontend/src/views/ e src/components/)
+App.vue: Struttura principale, Navbar, gestione stato wallet globale (connessione/disconnessione).
+LoginView.vue, RegisterView.vue: Form per autenticazione.
+EventsView.vue: Mostra lista eventi (da store/API). Include pulsante "Compra Biglietto". Formatta prezzo da Wei a MATIC.
+MyTicketsView.vue: Mostra biglietti posseduti dall'utente (da store/API). Include pulsante "Vendi" (che apre modale/prompt per prezzo).
+MarketplaceView.vue: Mostra biglietti in vendita (da store/API). Include pulsante "Compra".
+CreateEventView.vue: Form per creazione evento (accessibile da Admin).
+SettingsView.vue: Permette all'utente di switchare tra wallet interno ed esterno.
+Componenti riutilizzabili (es. EventCard.vue, TicketCard.vue, ListingCard.vue).
+State Management (Pinia - packages/frontend/src/stores/)
+authStore: Gestisce stato autenticazione (token, dati utente, isAuthenticated, isAdmin), azioni login, register, logout, WorkspaceUserData.
+walletStore: Gestisce stato connessione wallet esterno (MetaMask), indirizzo connesso, signer, stato isUsingExternalWallet, azioni connectWallet, disconnectWallet, ensureSigner. Interagisce con authStore per persistere la preferenza.
+eventStore (o simile): Gestisce stato lista eventi, azione WorkspaceEvents.
+ticketStore (o simile): Gestisce stato biglietti utente, azione WorkspaceMyTickets.
+marketplaceStore (o simile): Gestisce stato listings, azioni WorkspaceListings, listTicket, buyListing, cancelListing.
+Routing (packages/frontend/src/router/index.js)
+Definisce le rotte (/login, /register, /events, /my-tickets, /marketplace, /create-event, /settings).
+Implementa navigation guards (beforeEach) per proteggere rotte che richiedono autenticazione (meta: { requiresAuth: true }) o privilegi admin (meta: { requiresAdmin: true }).
+8. Modifiche Chiave al Database (Locale -> Da Replicare Online)
+
+Le seguenti modifiche sono state apportate allo schema del database PostgreSQL locale durante lo sviluppo e dovranno essere replicate su qualsiasi istanza di database di staging o produzione:
+
+Tabella users:
+Aggiunta colonna wallet_preference TEXT DEFAULT 'internal' NOT NULL; (per tracciare scelta wallet interno/esterno).
+Aggiunta colonna is_admin BOOLEAN DEFAULT false NOT NULL; (per ruolo admin).
+(Nota: Era stata aggiunta external_wallet_address e resa password_hash NULLable per SIWE, ma poi revertita. Assicurarsi che lo schema finale sia quello desiderato).
+Tabella events:
+Aggiunta colonna image_url TEXT NULL; (per URL immagine evento).
+Modificato tipo colonna original_price da BIGINT a NUMERIC; (per supportare valori Wei).
+Aggiunta colonna tickets_minted INTEGER DEFAULT 0 NOT NULL; (per tracciare biglietti mintati vs total_tickets).
+Comandi SQL Esempio (da adattare se necessario):
+
+SQL
+
+-- Per Tabella Users
+ALTER TABLE users ADD COLUMN wallet_preference TEXT DEFAULT 'internal' NOT NULL;
+ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT false NOT NULL;
+
+-- Per Tabella Events
+ALTER TABLE events ADD COLUMN image_url TEXT NULL;
+ALTER TABLE events ALTER COLUMN original_price TYPE NUMERIC;
+ALTER TABLE events ADD COLUMN tickets_minted INTEGER DEFAULT 0 NOT NULL;
+9. Stato Funzionale Attuale (Al 19 Aprile 2025)
+
+Core Funzionalità MVP:
+Registrazione e Login (Username/Password con wallet interno generato).
+Collegamento/Scollegamento Wallet Esterno (MetaMask) e persistenza preferenza.
+Visualizzazione Eventi (con prezzo formattato).
+Acquisto Primario Biglietti (Minting via backend, funziona per wallet interno).
+Visualizzazione Biglietti Posseduti.
+Messa in Vendita Biglietti (Marketplace P2P - flusso base con wallet interno).
+Acquisto Secondario Biglietti (Marketplace P2P - flusso base con wallet interno, include price cap).
+Annullamento Listing.
+Creazione Eventi (Solo Admin, tramite UI dedicata).
+Problemi Noti / Polish UI:
+UI Bottone "Compra" nel Marketplace non si disabilita visivamente per le proprie offerte (ma la logica blocca l'acquisto). (Priorità Bassa).
+UI Input Prezzo "Vendi" in "I Miei Biglietti" usa ancora window.prompt. (Priorità Media).
+Stile Generale: Funzionale ma esteticamente molto basilare, richiede CSS Polishing.
+Compromessi Accettati:
+Lettura dati primariamente da Cache DB manuale (potenziale lieve ritardo rispetto a on-chain).
+Gestione limiti RPC Infura (letture intensive possono rallentare/fallire, frontend gestisce mostrando dati vecchi dove possibile).
+10. Roadmap Immediata (Post-Creazione Eventi)
+
+Priorità definite per arrivare alla Demo MVP:
+
+(Opzionale/In Corso) CSS Polishing Minimo: Migliorare l'aspetto visivo generale per renderlo più presentabile.
+Deployment: Pubblicare Frontend (Vercel/Netlify) e Backend+DB (Render) su piattaforme gratuite. Questo è cruciale per la demo.
+Seed Data / Reset: Implementare uno script o un endpoint API (protetto da admin) per popolare/resettare il database con dati di test per facilitare le demo.
+Documentazione / Preparazione Demo: Preparare documentazione utente minima e/o una scaletta per guidare una demo efficace del flusso principale.
+11. Idee Future (Post-MVP Demo)
+
+Migliorare integrazione Wallet Esterno (gestire firme EIP-712 per listing/buy senza custodia backend).
+Abilitare creazione eventi/NFT direttamente da UI per organizzatori autorizzati (non solo admin globali).
+Integrazione Pagamenti FIAT (es. Stripe per acquisto primario, convertendo in crypto per minting).
+Cache DB Robusta (usare event listener da smart contract via WebSocket/TheGraph o polling più intelligente per aggiornamenti quasi real-time).
+Miglioramenti UX (notifiche, feedback visivo, gestione errori).
+Test più approfonditi (Unit, Integration, E2E).
+12. Istruzioni per Continuare lo Sviluppo
+
+Punto di Partenza: Il codice nel repository GitHub linkato è aggiornato e include la funzionalità di creazione eventi funzionante.
+Focus: Concentrarsi sulla Roadmap Immediata (Polishing, Deployment, Seed/Reset, Docs) per raggiungere l'obiettivo della Demo MVP.
+Evitare Regressioni: Non reintrodurre problemi già risolti relativi a:
+Funzionalità core (Auth, Mint, List, Buy, Cancel sono OK nel flusso base).
+Limiti RPC (la cache DB manuale è la soluzione attuale).
+Errori specifici di database o codice già corretti (fare riferimento al changelog.txt o a questo compendio).
+Database: Ricordarsi di applicare le modifiche DB (Sezione 8) a qualsiasi nuovo ambiente DB.
+Comunicazione: Mantenere il changelog.txt aggiornato con le modifiche significative.
+
+XX. Idee Future Dettagliate (Post-MVP Demo)
+
+Flusso Pagamento Acquisto Primario (Minting):
+
+Obiettivo: L'utente acquirente paga effettivamente il prezzo del biglietto + commissioni al momento del minting.
+Logica Proposta:
+L'utente paga PrezzoBiglietto + CommissioneServizio (+ Gas Fee implicita).
+PrezzoBiglietto viene trasferito al wallet dell'Organizzatore/Creatore dell'evento (indirizzo associato all'evento).
+CommissioneServizio viene trasferita a un wallet designato per il servizio.
+L'NFT del biglietto viene mintato e trasferito all'acquirente.
+Implicazioni: Richiede modifiche significative allo smart contract TicketNFT (o a un contratto di vendita primaria dedicato) per gestire msg.value, trasferire fondi a creatore e servizio. Necessario associare un indirizzo di pagamento a ogni evento nel DB e potenzialmente nello smart contract. Modifiche a backend e frontend per gestire il pagamento.
+Flusso Pagamento Marketplace P2P:
+
+Obiettivo: L'utente acquirente paga effettivamente il prezzo del biglietto listato + commissioni al venditore e al servizio.
+Logica Proposta:
+L'acquirente paga PrezzoListing + CommissioneServizio (+ Gas Fee implicita).
+PrezzoListing viene trasferito al wallet del Venditore.
+CommissioneServizio viene trasferita al wallet del servizio.
+L'NFT viene trasferito dal Marketplace (o dal venditore previa approve) all'acquirente.
+Implicazioni: Richiede modifiche significative allo smart contract Marketplace per gestire msg.value e la distribuzione dei fondi tra venditore e servizio. Modifiche a backend e frontend.
+Utilizzo Wallet Selezionato (Interno/Esterno):
+
+Obiettivo: Le azioni on-chain (List, Buy, Cancel nel marketplace, potenzialmente altre future) devono essere eseguite usando l'identità (e quindi firmando la transazione) del wallet che l'utente ha attualmente selezionato (interno gestito dal backend o esterno via MetaMask).
+Stato Attuale: Il sistema ibrido esiste (l'utente può scegliere), ma le azioni on-chain vengono probabilmente ancora gestite sempre tramite il backend che usa la chiave interna (o la chiave del minter per il minting primario).
+Implicazioni: Modifiche importanti necessarie sia nel backend (per verificare la preferenza utente prima di agire) sia soprattutto nel frontend. Se l'utente usa un wallet esterno, il frontend deve:
+Preparare i dati della transazione (chiamata a funzione del contratto, parametri, valore ETH/MATIC).
+Richiedere all'utente di firmare e inviare la transazione tramite il provider del wallet esterno (es. MetaMask).
+Gestire la risposta (hash della transazione) e comunicarla al backend per aggiornare lo stato off-chain (DB cache).
+Ruolo Utente "Organizzatore/Creatore di Eventi":
+
+Obiettivo: Permettere a utenti specifici (diversi dagli admin globali) di creare e gestire i propri eventi tramite l'interfaccia utente.
+Logica Proposta:
+Introdurre un nuovo ruolo/flag nel DB per gli utenti (es. is_creator BOOLEAN).
+Modificare il middleware di autorizzazione per la rotta POST /api/events (e future rotte di gestione eventi) per permettere l'accesso agli utenti con is_admin = true OPPURE is_creator = true.
+Associare gli eventi creati all'ID dell'utente creatore nel DB.
+(Opzionale) Creare un'interfaccia (accessibile solo agli admin) per assegnare/revocare il ruolo is_creator agli utenti.
+Implicazioni: Principalmente modifiche al backend (DB schema, middleware, controller eventi) e potenzialmente una piccola aggiunta UI per la gestione dei ruoli.
+Quale affrontare per prima?
+
+Analizzando la complessità:
+
+Ruolo Utente "Organizzatore" (Idea 4): Sembra la più semplice da implementare in questa fase. Riguarda principalmente logica backend standard (DB, middleware) e non richiede modifiche agli smart contract o ai flussi di firma complessi nel frontend.
+Utilizzo Wallet Selezionato (Idea 3): Ha una complessità media, richiede un lavoro significativo sul frontend per gestire l'invio di transazioni tramite wallet esterni.
+Flussi di Pagamento (Idea 1 e 2): Sono le più complesse perché richiedono modifiche sostanziali agli smart contract (che sono più difficili da aggiornare una volta deployati) oltre a modifiche coordinate a backend e frontend.

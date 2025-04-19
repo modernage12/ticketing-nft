@@ -2,9 +2,10 @@ const userService = require('../services/userService');
 const jwt = require('jsonwebtoken'); // Lo useremo magari dopo per il login
 const bcrypt = require('bcrypt');
 const { pool } = require('../config/db'); 
+const authService = require('../services/userService');
 
 const registerUser = async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, registerAsCreator = false } = req.body;
 
     // Validazione input base
     if (!username || !password) {
@@ -16,7 +17,7 @@ const registerUser = async (req, res) => {
 
     try {
         // Chiamiamo il servizio per creare l'utente
-        const newUser = await userService.createUser(username, password);
+        const newUser = await authService.createUser(username, password, registerAsCreator);
         // Per ora restituiamo solo i dati utente (senza password hash)
         // In futuro potremmo generare e restituire un JWT qui
         res.status(201).json({
@@ -67,7 +68,8 @@ const loginUser = async (req, res) => {
             username: user.username,
             walletAddress: user.wallet_address, // Indirizzo wallet interno
             walletPreference: user.wallet_preference, // Includi la preferenza nel payload del token
-            isAdmin: user.isAdmin
+            isAdmin: user.isAdmin,
+            isCreator: user.is_creator
         };
 
         const jwtSecret = process.env.JWT_SECRET;
@@ -90,7 +92,8 @@ const loginUser = async (req, res) => {
                 username: user.username,
                 walletAddress: user.wallet_address, // Indirizzo wallet interno
                 walletPreference: user.wallet_preference, // --> AGGIUNTO: La preferenza letta dal DB
-                isAdmin: user.is_admin
+                isAdmin: user.is_admin,
+                isCreator: user.is_creator,
             }
         });
 
@@ -110,8 +113,8 @@ const getCurrentUser = async (req, res) => {
     try { // <-- Blocco try INIZIA qui
         // Query diretta al DB
         const userResult = await pool.query(
-            'SELECT user_id, username, wallet_address, wallet_preference, is_admin FROM users WHERE user_id = $1',
-            [userId]
+            'SELECT user_id, username, wallet_address, wallet_preference, is_admin, is_creator FROM users WHERE user_id = $1', // <-- AGGIUNGI is_creator
+            [req.user.userId] // req.user.userId viene dal middleware di autenticazione base
         );
         const userFromDb = userResult.rows[0];
 
@@ -125,7 +128,8 @@ const getCurrentUser = async (req, res) => {
             username: userFromDb.username,
             walletAddress: userFromDb.wallet_address,
             walletPreference: userFromDb.wallet_preference,
-            isAdmin: userFromDb.is_admin
+            isAdmin: userFromDb.is_admin,
+            isCreator: userFromDb.is_creator
         });
 
     } catch (error) { // <-- Blocco catch per gestire errori della query

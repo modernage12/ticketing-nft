@@ -4,7 +4,7 @@ const router = express.Router();
 const eventController = require('../controllers/eventController');
 const { protect } = require('../middleware/authMiddleware'); // Auth middleware
 // Importa il middleware di autenticazione admin
-const adminAuthMiddleware = require('../middleware/adminAuthMiddleware');
+const eventMgmtAuthMiddleware = require('../middleware/eventMgmtAuthMiddleware');
 
 // POST /api/events/:eventId/buy (Rotta protetta per comprare)
 router.post('/:eventId/buy', protect, eventController.buyTicket);
@@ -15,7 +15,7 @@ router.get('/', eventController.getAllEvents);
 
 // POST /api/events/
 // Richiede autenticazione ADMIN
-router.post('/', adminAuthMiddleware, eventController.createEvent);
+router.post('/', eventMgmtAuthMiddleware, eventController.createEvent);
 
 
 module.exports = router;

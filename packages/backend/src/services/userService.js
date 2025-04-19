@@ -5,7 +5,7 @@ const { encrypt } = require('../utils/cryptoUtils'); // <-- Importa encrypt dall
 
 const SALT_ROUNDS = 10; // Costo computazionale per l'hashing bcrypt
 
-const createUser = async (username, password) => {
+const createUser = async (username, password, registerAsCreator) => {
     // 1. Hash della password (invariato)
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
@@ -28,16 +28,29 @@ const createUser = async (username, password) => {
     }
 
 
-    // 4. Inserisci nel database (includendo la chiave criptata)
-    //    Assicurati che la colonna nel DB si chiami 'encrypted_private_key'
+    // 4. Inserisci nel database (CORRETTO)
     const query = `
-        INSERT INTO Users (username, password_hash, wallet_address, encrypted_private_key)
-        VALUES ($1, $2, $3, $4)
-        RETURNING user_id, username, wallet_address, created_at;
-        -- Non restituiamo la chiave criptata per sicurezza
+        INSERT INTO Users (
+            username,       -- $1
+            password_hash,  -- $2
+            wallet_address, -- $3
+            encrypted_private_key, -- $4
+            is_admin,       -- $5
+            is_creator,     -- $6
+            wallet_preference -- $7
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7) -- Ora 7 placeholders
+        RETURNING user_id, username, wallet_address, created_at, is_admin, is_creator, wallet_preference; -- Restituisci anche i nuovi campi
     `;
-    // Passiamo i valori corretti, inclusa la chiave criptata (formato iv:authTag:key)
-    const values = [username, passwordHash, walletAddress, encryptedPrivateKeyData];
+    const values = [
+        username,           // $1
+        passwordHash,       // $2
+        walletAddress,      // $3
+        encryptedPrivateKeyData, // $4
+        false,              // $5: is_admin (sempre false alla registrazione)
+        registerAsCreator,  // $6: is_creator (dal parametro della funzione)
+        'internal'          // $7: wallet_preference (default 'internal')
+    ]; // Ora 7 valori, corrispondenti ai placeholders
 
     try {
         const result = await pool.query(query, values);
