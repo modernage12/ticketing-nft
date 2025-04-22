@@ -1,76 +1,131 @@
+// IMPORT NECESSARI ALL'INIZIO DEL FILE
 const { pool } = require('../config/db');
-const { provider, ticketNFTContract } = require('../config/ethers');
-const { ethers } = require('ethers');
+// ASSUMIAMO CHE 'ethersConfig' ESPORTI provider, ticketNFTContract (con ABI/address), e minterWallet (signer owner)
+const { provider, ticketNFTContract, marketplaceContract, minterWallet } = require('../config/ethers');
+// IMPORTA ethers SE NON GIA' PRESENTE IN ethersConfig O SE SERVE ALTROVE
+const { ethers } = require('ethers'); // Serve per ethers.isAddress
+const userService = require('./userService');
 
-// Chiave privata del wallet che può mintare
-const minterPrivateKey = process.env.PRIVATE_KEY;
-let minterWallet;
+// --- INIZIO CODICE NUOVO DA INCOLLARE (sostituisce la vecchia createEvent) ---
 
-try {
-    if (!minterPrivateKey) throw new Error("ERRORE CRITICO: PRIVATE_KEY (minter) non impostata nel .env!");
-    minterWallet = new ethers.Wallet(minterPrivateKey, provider);
-    console.log(`Wallet minter inizializzato per l'indirizzo: ${minterWallet.address}`);
-} catch (error) {
-     console.error("ERRORE CRITICO durante inizializzazione minterWallet:", error.message || error);
-     process.exit(1);
-}
-
+// Sostituisci l'intera funzione createEvent esistente con questa:
 const createEvent = async (eventData) => {
     const {
-        name,
-        date,
-        location,
-        totalTickets,
-        availableTickets,
-        priceWei, // Già convertito in Wei (stringa) dal controller
-        description,
-        imageUrl
-        // createdByUserId // Se deciso di salvarlo
+        name, date, location, totalTickets, priceWei, // Già Wei (stringa)
+        description, imageUrl, creatorAddress
     } = eventData;
 
-    // Definisci le colonne e i valori per l'inserimento
-    // name, description, date, location, original_price, total_tickets, tickets_minted
-    const query = `
-        INSERT INTO events (
-            name, date, location, total_tickets, original_price, description, image_url,
-            tickets_minted -- Aggiungiamo tickets_minted
-            /*, created_by_user_id */
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8 /*, $9 */)
-        RETURNING *;
-    `;
-    const values = [
-        name, date, location, totalTickets, priceWei, // priceWei va in original_price
-        description, imageUrl,
-        0 // <-- NUOVO: Valore iniziale per tickets_minted
-        /*, createdByUserId */
-    ];
+    // Validazione indirizzo creatore (già presente e corretta)
+    if (!creatorAddress || !ethers.isAddress(creatorAddress)) {
+        console.error("ERRORE SERVICE: creatorAddress non valido:", creatorAddress);
+        throw new Error("Indirizzo creatore non valido fornito al service.");
+    }
 
+    let newEvent; // Variabile per l'evento creato nel DB
+
+    // ---- PRIMA PARTE: Salva nel Database ----
+    // (Questa parte rimane invariata rispetto al tuo file attuale)
     try {
-        console.log("Executing DB query to create event:", query, values);
-        const result = await pool.query(query, values); // <-- MODIFICATA: usa 'pool'
-        console.log("DB query result:", result.rows[0]);
+        const query = `
+            INSERT INTO events (
+                name, date, location, total_tickets, original_price, description, image_url, tickets_minted
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING *;
+        `;
+        const values = [
+            name, date, location, totalTickets, priceWei, description, imageUrl, 0
+        ];
+
+        console.log("Eseguo query DB per creare evento:", values);
+        const result = await pool.query(query, values);
 
         if (result.rows.length > 0) {
-            // Formatta l'output se necessario (es: converti price_wei da stringa a BigInt o Ether string)
-            // Per ora restituiamo i dati grezzi dal DB
-            const newEvent = result.rows[0];
-            // Potresti voler riconvertire price_wei in Ether per la risposta API, ma è meglio
-            // che il frontend gestisca la visualizzazione dei Wei se necessario.
-            // newEvent.priceEther = ethers.formatEther(newEvent.price_wei);
-            return newEvent;
+            newEvent = result.rows[0];
+            console.log("Evento creato nel DB:", newEvent);
         } else {
-            throw new Error('Event creation failed, no rows returned.');
+            throw new Error('Creazione evento fallita nel DB.');
         }
-    } catch (error) {
-        console.error('Database error creating event:', error);
-        // Potresti voler gestire errori specifici del DB (es: violazione UNIQUE constraint)
-        // if (error.code === '23505') { // Esempio: unique constraint violation
-        //     throw new Error('An event with this name/date already exists.');
-        // }
-        throw new Error('Database operation failed during event creation.'); // Errore generico
+    } catch (dbError) {
+        console.error('Errore DB durante creazione evento:', dbError);
+        throw new Error('Operazione DB fallita durante creazione evento.');
     }
-};
+
+    // ---- SECONDA PARTE: Registra On-Chain (ASINCRONO) ----
+    // (Questa parte viene modificata per non attendere 'tx.wait()')
+
+    let onChainTxHash = null; // Per memorizzare l'hash
+
+    // Verifica che l'evento sia stato creato nel DB prima di procedere
+    if (!newEvent || !newEvent.event_id) {
+         console.error("ERRORE INTERNO: newEvent non definito dopo insert DB! Salto registrazione on-chain.");
+         // Restituiamo comunque l'evento DB (senza hash)
+         return { ...newEvent, onChainTxHash: null };
+    }
+
+    // Se l'evento DB esiste, invia la transazione on-chain
+    console.log(`---> Avvio registrazione on-chain per evento ID: ${newEvent.event_id}`);
+    const eventId = newEvent.event_id;
+    const originalPriceBigInt = BigInt(newEvent.original_price);
+
+    try {
+        // Verifica disponibilità wallet e contratto (già presente e corretta)
+        if (!minterWallet) throw new Error("minterWallet non disponibile.");
+        if (!ticketNFTContract || !ticketNFTContract.target) throw new Error("ticketNFTContract o il suo indirizzo non disponibili.");
+
+        console.log(`     Dettagli On-Chain: Evento ${eventId}, Creatore ${creatorAddress}, Prezzo ${originalPriceBigInt.toString()} Wei`);
+        console.log(`     Contratto: ${ticketNFTContract.target}, Wallet firmatario: ${minterWallet.address}`);
+
+        // --- INVIO TRANSAZIONE (SENZA ATTENDERE CONFERMA) ---
+        const tx = await ticketNFTContract.connect(minterWallet).registerEvent(
+            eventId,
+            creatorAddress,
+            originalPriceBigInt
+        );
+        // -----------------------------------------------------
+
+        onChainTxHash = tx.hash; // Salva l'hash subito dopo l'invio
+        console.log(`     Transazione inviata! Hash: ${onChainTxHash}`);
+        console.log(`     La conferma verrà gestita in background (non attesa).`);
+
+        // --- GESTIONE ASINCRONA DELLA CONFERMA (NON BLOCCANTE) ---
+        // Aggiungiamo un gestore per loggare l'esito quando avverrà
+        tx.wait(1).then(receipt => {
+            if (receipt && receipt.status === 1) {
+                console.log(`---> CONFERMA ASYNC On-Chain: Evento ${eventId} registrato! Blocco: ${receipt.blockNumber}, Tx: ${tx.hash}`);
+            } else {
+                console.error(`---> FALLIMENTO ASYNC On-Chain: Registrazione evento ${eventId} fallita (reverted?). Tx Hash: ${tx.hash}, Receipt Status: ${receipt?.status}`);
+            }
+        }).catch(waitError => {
+            console.error(`---> ERRORE ASYNC On-Chain durante attesa conferma per evento ${eventId}, Tx: ${tx.hash}:`, waitError);
+        });
+        // ------------------------------------------------------------
+
+    } catch (contractError) {
+        // Gestisce errori DURANTE L'INVIO della transazione
+        let reason = contractError.reason || contractError.message || "Errore sconosciuto durante invio tx on-chain";
+        console.error(`---> ERRORE On-Chain durante invio tx per evento ${eventId}: ${reason}`, contractError.code ? `(Code: ${contractError.code})` : '', contractError);
+        // Logghiamo l'errore ma NON lo rilanciamo, perché l'evento nel DB è valido.
+        // L'hash rimarrà null, indicando che l'invio on-chain è fallito.
+    }
+
+    // ---- PARTE FINALE: Restituisci Risultato ----
+    // Restituisce i dati dell'evento dal DB e l'hash (se l'invio è avvenuto)
+    return {
+       ...newEvent,             // Campi dell'evento (event_id, name, ...)
+       onChainTxHash: onChainTxHash // Hash della transazione (o null se invio fallito)
+   };
+}; // Fine della funzione createEvent aggiornata
+
+// --- FINE CODICE NUOVO DA INCOLLARE ---
+
+// Assicurati che alla fine del file ci sia l'export corretto per questa funzione,
+// ad esempio, se usi module.exports:
+// module.exports = {
+//    createEvent,
+//    // ...altre funzioni del service...
+// };
+// Se usi export:
+// export { createEvent };
 
 /**
  * Recupera tutti gli eventi dal database.
@@ -185,8 +240,252 @@ const mintTicketForUser = async (userId, userWalletAddress, eventId) => {
     }
 };
 
+// Nuova funzione in eventService.js
+
+/**
+ * Gestisce l'acquisto primario di un biglietto da parte di un utente.
+ * Chiama buyAndMintTicket sul contratto TicketNFT usando la chiave dell'utente.
+ * @param {number} userId - L'ID dell'utente che acquista.
+ * @param {number} eventId - L'ID dell'evento da acquistare.
+ * @returns {Promise<object>} - Oggetto con dettagli della transazione/biglietto.
+ */
+const purchasePrimaryTicket = async (userId, eventId) => {
+    console.log(`---> Avvio acquisto primario per Utente ID: ${userId}, Evento ID: ${eventId}`);
+
+    let eventDetails;
+    let userSigner;
+
+    try {
+        // --- 1. Recupera Dettagli Evento dal DB ---
+        console.log(`     Recupero dettagli evento ${eventId} dal DB...`);
+        const eventQuery = await pool.query(
+            'SELECT event_id, name, original_price, total_tickets, tickets_minted FROM events WHERE event_id = $1',
+            [eventId]
+        );
+
+        if (eventQuery.rows.length === 0) {
+            throw new Error(`Evento con ID ${eventId} non trovato.`);
+        }
+        eventDetails = eventQuery.rows[0];
+
+        // Verifica disponibilità biglietti
+        if (eventDetails.tickets_minted >= eventDetails.total_tickets) {
+            throw new Error(`Biglietti esauriti per l'evento ${eventId}.`);
+        }
+        console.log(`     Evento trovato: ${eventDetails.name}, Prezzo: ${ethers.formatEther(eventDetails.original_price)} MATIC, Disponibili: ${eventDetails.total_tickets - eventDetails.tickets_minted}`);
+
+        // --- 2. Recupera Dettagli Commissione dal Marketplace Contract ---
+        console.log(`     Recupero dettagli commissione da Marketplace Contract (${marketplaceContract.target})...`);
+        // Verifica che il contratto sia disponibile
+         if (!marketplaceContract || !marketplaceContract.target) {
+             throw new Error("Istanza contratto Marketplace non disponibile.");
+         }
+        const feeBps = await marketplaceContract.serviceFeeBasisPoints();
+        const serviceWallet = await marketplaceContract.serviceWallet(); // Indirizzo che riceve la fee
+        if (!serviceWallet || serviceWallet === ethers.ZeroAddress) {
+             throw new Error("Indirizzo wallet servizio non configurato correttamente nel Marketplace contract.");
+        }
+        console.log(`     Fee: ${Number(feeBps) / 100}%, Wallet Servizio: ${serviceWallet}`);
+
+        // --- 3. Calcola Costo Totale ---
+        const originalPriceBigInt = BigInt(eventDetails.original_price);
+        const serviceFeeBigInt = (originalPriceBigInt * feeBps) / 10000n; // Usa 10000n per BigInt
+        const totalDueBigInt = originalPriceBigInt + serviceFeeBigInt;
+        console.log(`     Costo Totale Calcolato: ${ethers.formatEther(totalDueBigInt)} MATIC (Prezzo: ${ethers.formatEther(originalPriceBigInt)}, Fee: ${ethers.formatEther(serviceFeeBigInt)})`);
+
+        // --- 4. Ottieni il Signer dell'Utente ---
+        console.log(`     Ottenimento signer per utente ID: ${userId}...`);
+        // !!! PARTE DELICATA: dipende da come gestisci le chiavi !!!
+        // Assumiamo una funzione che recupera la chiave criptata e la decripta.
+        // Questa funzione POTREBBE richiedere la password dell'utente o usare una chiave master.
+        try {
+             // Questa funzione è un ESEMPIO, devi implementarla o adattarla!
+            // RIGA MODIFICATA:
+            userSigner = await userService.getUserSigner(userId);
+            if (!userSigner) {
+                throw new Error("Impossibile ottenere il signer per l'utente.");
+            }       
+            console.log(`     Signer ottenuto per indirizzo: ${await userSigner.getAddress()}`);
+             // Verifica fondi (opzionale ma utile)
+             // RIGA CORRETTA:
+            const userBalance = await provider.getBalance(await userSigner.getAddress()); // Assumiamo 'provider' esportato da ethersConfig
+            console.log(`     Saldo utente: ${ethers.formatEther(userBalance)} MATIC`);
+            if (userBalance < totalDueBigInt) {
+                throw new Error(`Fondi insufficienti per l'utente ${userId}. Richiesti: ${ethers.formatEther(totalDueBigInt)} MATIC`);
+            }
+        }
+        catch (signerError) {
+            console.error(`Errore ottenimento/verifica signer per utente ${userId}:`, signerError);
+            throw new Error(`Impossibile procedere all'acquisto: ${signerError.message}`);
+        }
+
+
+        // --- 5. Esegui Transazione On-Chain ---
+        console.log(`     Invio transazione buyAndMintTicket per evento ${eventId} con valore ${ethers.formatEther(totalDueBigInt)} MATIC...`);
+         if (!ticketNFTContract || !ticketNFTContract.target) {
+             throw new Error("Istanza contratto TicketNFT non disponibile.");
+         }
+
+        const tx = await ticketNFTContract.connect(userSigner).buyAndMintTicket(
+            eventId,
+            {
+                value: totalDueBigInt,
+                // Potresti aggiungere gasLimit qui se necessario, come per registerEvent
+                // gasLimit: 500000n
+            }
+        );
+
+        console.log(`     Transazione buyAndMintTicket inviata! Hash: ${tx.hash}`);
+        console.log(`     In attesa di conferma...`);
+        const receipt = await tx.wait(1);
+
+        // --- 6. Gestisci Risultato On-Chain ---
+        if (receipt && receipt.status === 1) {
+            console.log(`---> SUCCESSO On-Chain: Acquisto per evento ${eventId} completato! Blocco: ${receipt.blockNumber}, Tx: ${receipt.hash}`);
+
+            // --- 7. Estrai Token ID dai Log ---
+            let mintedTokenId = null;
+            try {
+                // L'ABI del contratto è già noto all'istanza usata per inviare la tx,
+                // quindi Ethers v6 dovrebbe aver già parsato i log.
+                // Cerchiamo l'evento Transfer standard ERC721 emesso dal contratto TicketNFT
+                const transferEventSignature = 'Transfer(address,address,uint256)';
+                const ticketNFTInterface = new ethers.Interface(ticketNFTContract.interface.fragments); // Usa l'interfaccia del contratto
+
+                for (const log of receipt.logs) {
+                     // Confronta l'indirizzo del log con quello del contratto NFT
+                     if (log.address.toLowerCase() === ticketNFTContract.target.toLowerCase()) {
+                        try {
+                            const parsedLog = ticketNFTInterface.parseLog(log);
+                            if (parsedLog && parsedLog.name === 'Transfer') {
+                                // Controlla se è un evento di mint (from == address(0))
+                                if (parsedLog.args.from === ethers.ZeroAddress) {
+                                    mintedTokenId = parsedLog.args.tokenId;
+                                    console.log(`     Token ID mintato estratto dai log: ${mintedTokenId.toString()}`);
+                                    break; // Trovato, esci dal ciclo
+                                }
+                            }
+                        } catch (parseError) {
+                           // Ignora log che non corrispondono all'ABI del TicketNFT
+                           // console.debug("Log non parsabile con ABI TicketNFT:", log);
+                        }
+                    }
+                }
+
+                if (mintedTokenId === null) {
+                    console.error("ERRORE CRITICO: Impossibile estrarre il tokenId mintato dai log della transazione!", receipt.logs);
+                    // Potremmo lanciare un errore qui o procedere senza tokenId, ma è rischioso per la consistenza DB
+                    throw new Error("Estrazione Token ID fallita dopo minting on-chain.");
+                }
+            } catch (logError) {
+                console.error("ERRORE durante l'estrazione del Token ID dai log:", logError);
+                // Rilancia l'errore perché senza Token ID non possiamo aggiornare il DB correttamente
+                throw logError;
+            }
+
+
+            // --- 8. Aggiorna Database (INSERT Ticket, UPDATE Event) ---
+            console.log("     Aggiornamento database...");
+            const dbClient = await pool.connect(); // Ottieni un client dal pool per la transazione DB
+            try {
+                await dbClient.query('BEGIN'); // Inizia la transazione DB
+
+                // Recupera il timestamp del blocco
+                const block = await provider.getBlock(receipt.blockNumber);
+                const issuanceTimestamp = new Date(Number(block.timestamp) * 1000);
+                const ownerWalletAddress = await userSigner.getAddress();
+
+                // Inserisci il nuovo biglietto nella tabella 'tickets'
+                const insertTicketQuery = `
+                    INSERT INTO tickets (
+                        token_id, nft_contract_address, owner_wallet_address, owner_user_id,
+                        event_id, original_price, issuance_date, is_listed, last_checked_block
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+                    RETURNING db_ticket_id;
+                `;
+                const insertTicketValues = [
+                    mintedTokenId.toString(),   // token_id (convertito in stringa se BigInt)
+                    ticketNFTContract.target,   // nft_contract_address
+                    ownerWalletAddress,         // owner_wallet_address
+                    userId,                     // owner_user_id
+                    eventId,                    // event_id
+                    eventDetails.original_price,// original_price (già nel formato corretto dal DB)
+                    issuanceTimestamp,          // issuance_date
+                    receipt.blockNumber         // last_checked_block
+                ];
+                const ticketResult = await dbClient.query(insertTicketQuery, insertTicketValues);
+                console.log(`     Nuovo record inserito nella tabella 'tickets' (ID: ${ticketResult.rows[0].ticket_id})`);
+
+                // Aggiorna il contatore 'tickets_minted' nella tabella 'events'
+                const updateEventQuery = `
+                    UPDATE events
+                    SET tickets_minted = tickets_minted + 1
+                    WHERE event_id = $1;
+                `;
+                await dbClient.query(updateEventQuery, [eventId]);
+                console.log(`     Contatore 'tickets_minted' incrementato per evento ${eventId}.`);
+
+                await dbClient.query('COMMIT'); // Conferma la transazione DB
+                console.log("     Aggiornamento database completato con successo.");
+
+                // --- 9. Restituisci Risultato Completo ---
+                return {
+                    success: true,
+                    message: "Acquisto completato con successo!",
+                    transactionHash: receipt.hash,
+                    tokenId: mintedTokenId.toString(), // Restituisci il tokenId reale
+                    blockNumber: receipt.blockNumber,
+                    eventId: eventId
+                };
+
+            } catch (dbError) {
+                await dbClient.query('ROLLBACK'); // Annulla la transazione DB in caso di errore
+                console.error("ERRORE durante l'aggiornamento del database dopo minting:", dbError);
+                // Lancia un errore specifico per indicare che l'aggiornamento DB è fallito
+                // L'acquisto on-chain è avvenuto, ma il DB non è consistente! Richiede attenzione.
+                throw new Error(`Minting on-chain completato (Tx: ${receipt.hash}), ma aggiornamento DB fallito: ${dbError.message}`);
+            } finally {
+                dbClient.release(); // Rilascia sempre il client DB
+            }
+
+        } else { // Se receipt.status !== 1 (transazione on-chain fallita/reverted)
+            console.error(`---> FALLIMENTO On-Chain: Acquisto per evento ${eventId} fallito (reverted?). Tx Hash: ${tx?.hash}, Receipt Status: ${receipt?.status}`);
+            // Cerca di estrarre il motivo del revert, se disponibile nella ricevuta (Ethers v6 potrebbe averlo)
+            let revertReason = "La transazione on-chain è fallita (reverted).";
+            // Nota: l'errore originale catturato nel blocco catch esterno potrebbe avere più dettagli sul revert
+            // throw new Error(revertReason); // Rilancia con motivo specifico se possibile
+             throw new Error(`La transazione on-chain per l'acquisto è fallita (reverted).`); // Errore generico
+        }
+
+    } catch (error) { // Blocco catch esterno per errori generali (es. ottenimento signer, chiamata contratto iniziale, errori DB non gestiti)
+        console.error(`ERRORE CRITICO durante purchasePrimaryTicket per Utente ${userId}, Evento ${eventId}:`, error.reason || error.message || error);
+        // Prova a dare un messaggio più utile basato sull'errore catturato
+        let userFriendlyMessage = 'Acquisto fallito';
+        if (error.code === 'INSUFFICIENT_FUNDS') {
+             userFriendlyMessage = 'Fondi insufficienti nel wallet per completare l\'acquisto (prezzo + gas).';
+        } else if (error.message.includes('Evento non trovato')) {
+             userFriendlyMessage = 'Evento specificato non trovato nel database.';
+        } else if (error.message.includes('Biglietti esauriti')) {
+             userFriendlyMessage = 'I biglietti per questo evento sono esauriti.';
+        } else if (error.message.includes('Estrazione Token ID fallita')) {
+            userFriendlyMessage = 'Acquisto on-chain riuscito, ma errore interno nel processare il risultato.'; // Segnala problema interno
+        } else if (error.message.includes('aggiornamento DB fallito')) {
+             userFriendlyMessage = 'Acquisto on-chain riuscito, ma errore interno nell\'aggiornare i dati.'; // Segnala problema interno
+        } else if (error.code === 'CALL_EXCEPTION' || error.message.toLowerCase().includes('reverted')) {
+            // Errore generico da revert del contratto, se non catturato specificamente prima
+             userFriendlyMessage = 'La transazione è stata rifiutata dal contratto.';
+             // Potresti provare ad estrarre error.reason qui se disponibile
+        } else if (error.message.includes('Impossibile procedere all\'acquisto')) {
+             userFriendlyMessage = `Impossibile procedere: ${error.message.split(': ')[1]}`; // Usa messaggio da errore signer/recupero chiave
+        }
+        // Rilancia l'errore con un messaggio più strutturato o solo il messaggio user-friendly
+        throw new Error(`${userFriendlyMessage}`); // Passa solo il messaggio pulito al controller
+    }
+};
+
 module.exports = {
     getAllEvents,
     mintTicketForUser,
-    createEvent
+    createEvent,
+    purchasePrimaryTicket
 };

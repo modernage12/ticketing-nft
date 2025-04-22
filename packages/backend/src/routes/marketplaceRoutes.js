@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 // Importiamo entrambe le funzioni controller
-const { getListings, buyListedTicket, cancelListing } = require('../controllers/marketplaceController');
+const { getListings, buyListedTicket, cancelListing, buyListing } = require('../controllers/marketplaceController');
 // Importiamo il middleware di autenticazione
 const { protect } = require('../middleware/authMiddleware');
 
@@ -16,6 +16,7 @@ router.get('/listings', getListings);
 // La rotta è protetta: solo gli utenti loggati possono acquistare.
 router.post('/listings/:tokenId/buy', protect, buyListedTicket);
 router.delete('/listings/:tokenId', protect, cancelListing);
+router.post('/buy/:listingId', protect, buyListing);
 
 
 module.exports = router;

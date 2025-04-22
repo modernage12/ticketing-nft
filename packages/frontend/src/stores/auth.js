@@ -312,6 +312,56 @@ export const useAuthStore = defineStore('auth', () => {
             console.error("Errore buyListedTicket action:", err.response?.data || err.message); const specificError = err.response?.data?.error || 'Errore acquisto marketplace.'; error.value = specificError; throw new Error(specificError);
         } finally { console.log(">>> buyListedTicket: Eseguo finally block"); loading.value = false; }
     }
+    
+    // AZIONE buyFromMarketplace - VERSIONE FINALE PULITA
+async function buyFromMarketplace(listingId) {
+    if (!token.value) throw new Error("Utente non loggato.");
+
+    // Verifica input listingId
+    if (listingId === undefined || listingId === null || isNaN(parseInt(listingId))) {
+         console.error("ERRORE: listingId non valido passato a buyFromMarketplace:", listingId);
+         throw new Error("ID Listing non valido.");
+    }
+
+    loading.value = true;
+    error.value = null;
+    let mainResponseData = null;
+
+    // Costruisci URL dinamicamente usando template literal (backtick ``)
+    const url = `${MARKETPLACE_API_URL}/buy/${listingId}`;
+    console.log(`>>> buyFromMarketplace: Chiamando POST ${url}`); // Log standard
+
+    try {
+        // Usa la variabile 'url' costruita dinamicamente
+        const response = await axios.post(url, {}, authHeader.value);
+        console.log(">>> buyFromMarketplace: Risposta API OK:", response.data);
+        mainResponseData = response.data;
+
+        // Refresh dati dopo successo
+        try {
+            console.log(">>> buyFromMarketplace: Refreshing listings & myTickets...");
+            await fetchListings();
+            await fetchMyTickets();
+        } catch (refreshError) {
+            console.warn("WARN buyFromMarketplace: Errore refresh post-acquisto P2P:", refreshError.message);
+        }
+        return mainResponseData?.details ?? mainResponseData;
+
+    } catch (err) {
+        console.error("Errore buyFromMarketplace action:", err.response?.data || err.message || err);
+        const specificError = err.response?.data?.message || err.response?.data?.error || 'Errore acquisto marketplace.';
+        error.value = specificError;
+        // Aggiungiamo l'URL specifico nell'errore 404 per chiarezza
+        if (err.response?.status === 404) {
+            error.value = `Impossibile contattare l'API all'indirizzo: ${url}. Controlla l'URL e che il backend sia in esecuzione.`
+            throw new Error(error.value);
+        }
+        throw new Error(specificError);
+    } finally {
+        console.log(">>> buyFromMarketplace: Eseguo finally block");
+        loading.value = false;
+    }
+}
 
     async function cancelListing(tokenId) {
         if (!token.value) throw new Error("Utente non loggato.");
@@ -333,6 +383,7 @@ export const useAuthStore = defineStore('auth', () => {
             console.error("Errore cancelListing action:", err.response?.data || err.message); const specificError = err.response?.data?.error || 'Errore annullamento offerta.'; error.value = specificError; throw new Error(specificError);
         } finally { console.log(">>> cancelListing: Eseguo finally block"); loading.value = false; }
     }
+    
 
     // Esporta tutto (verifica completezza)
     return {
@@ -341,6 +392,6 @@ export const useAuthStore = defineStore('auth', () => {
         isLoggedIn, authHeader,
         loadToken, fetchUser, register, login, logout, fetchMyTickets, fetchEvents,
         buyTicket, fetchListings, listTicketForSale, buyListedTicket, cancelListing, 
-        updateWalletPreferenceAPI, isAdmin, isCreator
+        updateWalletPreferenceAPI, isAdmin, isCreator, buyFromMarketplace
     };
 });

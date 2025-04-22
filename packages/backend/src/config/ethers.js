@@ -1,10 +1,10 @@
-
+// packages/backend/src/config/ethers.js <--- ASSICURATI CHE SIA QUESTO FILE
 
 // Importiamo la libreria ethers
 const { ethers } = require('ethers');
 
-// Importiamo le ABI dai file JSON che abbiamo copiato
-// Usiamo require e accediamo alla proprietà 'abi'
+// Importiamo le ABI dai file JSON
+// ASSICURATI CHE QUESTI PERCORSI SIANO CORRETTI E I FILE JSON CONTENGANO L'ABI NELLA PROPRIETA' 'abi'
 const ticketNFTAbi = require('../contracts/abi/TicketNFT.json').abi;
 const marketplaceAbi = require('../contracts/abi/Marketplace.json').abi;
 
@@ -12,31 +12,59 @@ const marketplaceAbi = require('../contracts/abi/Marketplace.json').abi;
 const rpcUrl = process.env.AMOY_RPC_URL;
 const ticketNFTAddress = process.env.TICKET_NFT_ADDRESS;
 const marketplaceAddress = process.env.MARKETPLACE_ADDRESS;
+// --- LEGGI LA CHIAVE PRIVATA DELL'OWNER/MINTER ---
+const ownerPrivateKey = process.env.PRIVATE_KEY;
 
-// Controllo di sicurezza: assicuriamoci che le variabili siano state caricate
-if (!rpcUrl || !ticketNFTAddress || !marketplaceAddress) {
-    console.error("ERRORE CRITICO: Variabili d'ambiente blockchain (AMOY_RPC_URL, TICKET_NFT_ADDRESS, MARKETPLACE_ADDRESS) non trovate nel file .env!");
-    console.log("RPC URL:", rpcUrl ? "OK" : "MANCANTE");
-    console.log("TicketNFT Addr:", ticketNFTAddress ? "OK" : "MANCANTE");
-    console.log("Marketplace Addr:", marketplaceAddress ? "OK" : "MANCANTE");
-    // In un'applicazione reale potremmo voler uscire o lanciare un errore
-    // process.exit(1);
+// Controllo di sicurezza esteso
+let hasError = false;
+if (!rpcUrl) {
+    console.error("ERRORE CRITICO: AMOY_RPC_URL non trovato nel file .env!"); hasError = true;
+}
+if (!ticketNFTAddress) {
+    console.error("ERRORE CRITICO: TICKET_NFT_ADDRESS non trovato nel file .env!"); hasError = true;
+}
+if (!marketplaceAddress) {
+    console.error("ERRORE CRITICO: MARKETPLACE_ADDRESS non trovato nel file .env!"); hasError = true;
+}
+// --- CONTROLLO CHIAVE PRIVATA ---
+if (!ownerPrivateKey) {
+    console.error("ERRORE CRITICO: PRIVATE_KEY (owner/minter wallet) non trovata nel file .env!"); hasError = true;
 }
 
-// Creiamo il Provider JSON RPC per connetterci alla rete Amoy
-// Questo oggetto permette operazioni di lettura dalla blockchain
+if (hasError) {
+    console.log("Verifica il tuo file .env e riavvia il backend.");
+    // process.exit(1); // Potremmo uscire qui se preferisci
+}
+
+// Creiamo il Provider JSON RPC
 const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-// Creiamo le istanze dei contratti, collegandole al provider e usando le ABI
-// Queste istanze ci permetteranno di chiamare le funzioni dei contratti deployati
+// --- CREA IL WALLET/SIGNER DELL'OWNER ---
+let minterWallet = null; // USA 'let' QUI
+if (ownerPrivateKey && !hasError) { // Aggiunto !hasError per sicurezza
+    try {
+        const keyWithPrefix = ownerPrivateKey.startsWith('0x') ? ownerPrivateKey : `0x${ownerPrivateKey}`;
+        minterWallet = new ethers.Wallet(keyWithPrefix, provider); // Assegnazione a 'let'
+        console.log(`Wallet Owner/Minter inizializzato per l'indirizzo: ${minterWallet.address}`);
+    } catch (walletError) {
+        console.error("ERRORE CRITICO durante creazione minterWallet:", walletError.message);
+        process.exit(1); // Usciamo se non possiamo creare il wallet
+    }
+} else if (!hasError) { // Se le altre var c'erano ma la chiave no
+     console.warn("ATTENZIONE: MINTER WALLET NON INIZIALIZZATO per mancanza PRIVATE_KEY. Le funzioni on-chain falliranno.");
+}
+// --- FINE CREAZIONE WALLET ---
+
+// Creiamo le istanze dei contratti collegate al PROVIDER
 const ticketNFTContract = new ethers.Contract(ticketNFTAddress, ticketNFTAbi, provider);
 const marketplaceContract = new ethers.Contract(marketplaceAddress, marketplaceAbi, provider);
 
-console.log("Provider Ethers e istanze contratti inizializzate."); // Messaggio di conferma
+console.log("Provider Ethers e istanze contratti base inizializzate.");
 
-// Esportiamo il provider e le istanze dei contratti per poterli usare nel resto del backend
+// Esportiamo tutto il necessario
 module.exports = {
     provider,
     ticketNFTContract,
-    marketplaceContract
+    marketplaceContract,
+    minterWallet // <-- ESPORTA IL WALLET CREATO (o null se la chiave manca)
 };

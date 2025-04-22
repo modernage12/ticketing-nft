@@ -25,8 +25,8 @@ const handleBuy = async (listing) => {
     buySuccessMessage.value = '';
 
     try {
-        console.log(`>>> MarketplaceView: Chiamo authStore.buyListedTicket per tokenId ${listing.tokenId}`);
-        const result = await authStore.buyListedTicket(listing.tokenId);
+        console.log(`>>> MarketplaceView: Chiamo authStore.buyFromMarketplace per listingId ${listing.listing_id}`); // Usa listing_id
+        const result = await authStore.buyFromMarketplace(listing.listing_id); // Chiama la nuova azione con listing_id
         buySuccessMessage.value = `Acquisto del Ticket ID ${listing.tokenId} completato! Hash: ${result.buyTxHash}`;
     } catch (error) {
         buyError.value = authStore.error || 'Errore imprevisto durante l\'acquisto.';

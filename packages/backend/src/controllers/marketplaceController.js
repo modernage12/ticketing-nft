@@ -81,8 +81,47 @@ const cancelListing = async (req, res) => {
     }
 };
 
+// NUOVA FUNZIONE PER GESTIRE L'ACQUISTO SECONDARIO (Codice invariato)
+const buyListing = async (req, res, next) => { // 'exports.' rimosso, esportiamo sotto
+    try {
+        const { listingId } = req.params;
+        const buyerUserId = req.user.userId;
+
+        if (!listingId || isNaN(parseInt(listingId, 10))) { // Aggiunto controllo isNaN
+             return res.status(400).json({ status: 'fail', message: 'Listing ID mancante o non valido' });
+        }
+
+        console.log(`[MarketplaceController] Richiesta acquisto listing ${listingId} da utente ${buyerUserId}`);
+
+        const result = await marketplaceService.purchaseSecondaryTicket(buyerUserId, parseInt(listingId, 10));
+
+        console.log(`[MarketplaceController] Acquisto listing ${listingId} completato con successo.`);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Acquisto completato con successo!',
+            details: result
+        });
+
+    } catch (error) {
+        console.error(`[MarketplaceController] Errore durante l'acquisto del listing ${req.params.listingId}:`, error);
+         // Miglioriamo la gestione errori specifica se necessario
+        if (error.message.includes('Listing non trovato') || error.message.includes('Listing non attivo')) {
+             res.status(404).json({ status: 'fail', message: error.message });
+        } else if (error.message.includes('acquistare il proprio listing') || error.message.includes('Fondi insufficienti')) {
+            res.status(400).json({ status: 'fail', message: error.message });
+        } else if (error.message.includes('decriptare la chiave') || error.message.includes('utente non trovato')) {
+             res.status(500).json({ status: 'error', message: 'Errore interno del server durante il recupero delle credenziali utente.' }); // Nasconde dettagli implementativi
+        } else {
+            // Passa l'errore al middleware di gestione errori globale per errori generici/imprevisti
+            next(error);
+        }
+    }
+};
+
 module.exports = {
     getListings,
     buyListedTicket, // <-- Esporta la nuova funzione
-    cancelListing
+    cancelListing,
+    buyListing
 };

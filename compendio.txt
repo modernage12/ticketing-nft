@@ -249,3 +249,234 @@ Analizzando la complessità:
 Ruolo Utente "Organizzatore" (Idea 4): Sembra la più semplice da implementare in questa fase. Riguarda principalmente logica backend standard (DB, middleware) e non richiede modifiche agli smart contract o ai flussi di firma complessi nel frontend.
 Utilizzo Wallet Selezionato (Idea 3): Ha una complessità media, richiede un lavoro significativo sul frontend per gestire l'invio di transazioni tramite wallet esterni.
 Flussi di Pagamento (Idea 1 e 2): Sono le più complesse perché richiedono modifiche sostanziali agli smart contract (che sono più difficili da aggiornare una volta deployati) oltre a modifiche coordinate a backend e frontend.
+
+
+Modifiche al Database Locale (da Replicare per Deployment Online)
+
+Questa sezione riassume tutte le modifiche strutturali che abbiamo apportato allo schema del database PostgreSQL locale durante lo sviluppo recente. Queste modifiche devono essere applicate a qualsiasi database utilizzato per il deployment (staging o produzione) affinché l'applicazione funzioni correttamente.
+
+Tabella users:
+
+Aggiunta colonna: is_admin BOOLEAN DEFAULT false NOT NULL
+Aggiunta colonna: is_creator BOOLEAN DEFAULT false NOT NULL
+Aggiunta colonna: wallet_preference TEXT DEFAULT 'internal' NOT NULL
+(Ricontrollare se altre modifiche come external_wallet_address sono state mantenute o revertite secondo le decisioni finali)
+Tabella events:
+
+Aggiunta colonna: tickets_minted INTEGER DEFAULT 0 NOT NULL
+Aggiunta colonna: image_url TEXT NULL
+Modifica tipo colonna: ALTER COLUMN original_price TYPE NUMERIC (da BIGINT o qualsiasi fosse prima a NUMERIC)
+Comandi SQL Esempio (da eseguire sul DB di destinazione):
+
+SQL
+
+-- Modifiche Tabella Users
+ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT false NOT NULL;
+ALTER TABLE users ADD COLUMN is_creator BOOLEAN DEFAULT false NOT NULL;
+ALTER TABLE users ADD COLUMN wallet_preference TEXT DEFAULT 'internal' NOT NULL;
+-- Aggiungere qui eventuali altre ALTER TABLE per users se necessarie
+
+-- Modifiche Tabella Events
+ALTER TABLE events ADD COLUMN tickets_minted INTEGER DEFAULT 0 NOT NULL;
+ALTER TABLE events ADD COLUMN image_url TEXT NULL;
+ALTER TABLE events ALTER COLUMN original_price TYPE NUMERIC;
+
+XX. Aggiornamento Stato Sviluppo (19 Aprile 2025)
+
+Completamento Funzionalità Precedenti: Implementati e testati Ruolo "Event Creator" e Registrazione come Creator, risolvendo bug relativi ad autorizzazione, stato frontend, DB e UI.
+Cambiamento di Priorità (Post-MVP Base): È stato deciso di anticipare l'implementazione dei flussi di pagamento on-chain con commissioni (Idee 1 e 2) rispetto al polishing/deployment dell'MVP attuale.
+Razionale: Stabilire la corretta logica di pagamento e trasferimento fondi negli smart contract è visto come un prerequisito fondamentale per poter poi integrare efficacemente l'utilizzo dei wallet esterni selezionati dall'utente (Idea 3) per tutte le azioni transazionali (acquisto primario e P2P).
+Fase Attuale - Inizio Implementazione Flussi di Pagamento Reali:
+Obiettivo: Modificare gli smart contract e l'applicazione full-stack per gestire transazioni economiche reali (in MATIC/cryptovaluta della testnet/mainnet) sia per l'acquisto primario che per quello secondario, includendo una commissione per il servizio.
+Scope Principale:
+Smart Contract (TicketNFT.sol, Marketplace.sol): Progettare, implementare e testare modifiche per:
+Rendere le funzioni di acquisto (mintTicket pubblica o nuova funzione, buyTicket P2P) payable.
+Gestire msg.value per verificare il pagamento corretto (prezzo + commissione).
+Distribuire i fondi: inviare il prezzo al creatore/venditore e la commissione a un wallet designato per il servizio.
+Definire e gestire l'indirizzo del wallet del servizio e la percentuale/importo della commissione (probabilmente configurabili dall'owner del contratto).
+Associare un indirizzo di pagamento al creatore dell'evento (potrebbe richiedere modifiche al minting o dati off-chain).
+Backend: Adattare i servizi e i controller per interagire con le nuove funzioni degli smart contract, gestire/recuperare gli indirizzi di pagamento dei creatori, potenzialmente esporre informazioni sulle commissioni.
+Frontend: Aggiornare l'UI per mostrare i prezzi (eventualmente con dettaglio commissioni), modificare la logica di acquisto per interagire con le nuove API/contratti.
+Prossimo Passo Immediato: Discussione e progettazione dettagliata delle modifiche necessarie agli Smart Contract TicketNFT.sol e Marketplace.sol.
+
+XX. Aggiornamento Stato Sviluppo (19 Aprile 2025)
+
+Completamento Funzionalità Precedenti: Implementati e testati Ruolo "Event Creator" e Registrazione come Creator, risolvendo bug relativi ad autorizzazione, stato frontend, DB e UI.
+Cambiamento di Priorità (Post-MVP Base): È stato deciso di anticipare l'implementazione dei flussi di pagamento on-chain con commissioni fisse per la piattaforma (Idee 1 e 2) rispetto al polishing/deployment dell'MVP attuale.
+Razionale: Stabilire la corretta logica di pagamento e trasferimento fondi negli smart contract per entrambi i flussi (acquisto primario e P2P) è visto come un prerequisito fondamentale per poter poi integrare efficacemente l'utilizzo dei wallet esterni selezionati dall'utente (Idea 3) e per creare un modello di business sostenibile per la piattaforma.
+Fase Attuale - Inizio Implementazione Flussi di Pagamento Reali:
+Obiettivo: Modificare gli smart contract e l'applicazione full-stack per gestire transazioni economiche reali (in MATIC/cryptovaluta) sia per l'acquisto primario che per quello secondario, includendo una commissione percentuale fissa (definita dalla piattaforma) per il servizio.
+Scope Principale:
+Smart Contract (TicketNFT.sol, Marketplace.sol, potenziale nuovo Sale Contract): Progettare, implementare e testare modifiche per:
+Definire stato on-chain (configurabile solo dall'owner) per: indirizzo del wallet di servizio e percentuale di commissione.
+Rendere payable le funzioni di acquisto (minting primario, acquisto P2P).
+Gestire msg.value per verificare il pagamento corretto (prezzo + commissione).
+Distribuire i fondi:
+Acquisto Primario: Prezzo all'indirizzo del creatore dell'evento (richiede meccanismo per associare/recuperare indirizzo creatore), Commissione al wallet di servizio.
+Acquisto P2P: Prezzo Listing al venditore, Commissione al wallet di servizio.
+Gestire il trasferimento dell'NFT all'acquirente.
+Backend: Adattare servizi/controller per interagire con i nuovi contratti, gestire/recuperare gli indirizzi di pagamento dei creatori, esporre dati su prezzi/commissioni.
+Frontend: Aggiornare UI (dettaglio prezzi/commissioni), modificare logica d'acquisto.
+[2025-04-19 ~14:50 CEST] - Sviluppo Smart Contract: Revisionato codice `Marketplace.sol` fornito con implementazione iniziale commissioni P2P (basis points, wallet servizio, funzioni setter, eventi, logica in `buyItem`).
+[2025-04-19 ~14:55 CEST] - Bugfix Smart Contract: Corretto uso di `.transfer()` in `Marketplace.sol` (funzione `buyItem`) rimuovendo assegnazione risultato booleano e `require` successivi, in linea con Solidity >=0.8.0.
+[2025-04-19 14:45 CEST] - Sviluppo Smart Contract: Deciso di mantenere modificabili (solo da owner) la commissione (`serviceFeeBasisPoints`) e il wallet di servizio (`serviceWallet`) in `Marketplace.sol` per flessibilità futura. Codice attuale con funzioni `set...` e modificatore `onlyOwner` confermato.
+Fase Attuale - Implementazione Flussi di Pagamento Reali & Test:
+Obiettivo: Modificare gli smart contract e l'applicazione full-stack per gestire transazioni economiche reali (in MATIC/cryptovaluta) sia per l'acquisto primario che per quello secondario, includendo una commissione percentuale fissa (definita dalla piattaforma) per il servizio.
+Scope Principale:
+Smart Contract (TicketNFT.sol, Marketplace.sol): [...] (invariato)
+Test Smart Contract: Completati test unitari/integrazione approfonditi per `Marketplace.sol` utilizzando Hardhat, coprendo listing, acquisto con commissioni, cancellazione e funzioni amministrative. Risolto problema ambientale legato all'esecuzione dei test. (NUOVO)
+Backend: [...] (invariato)
+Frontend: [...] (invariato)
+Prossimo Passo Immediato: Implementare la logica delle commissioni nel contratto di minting primario (`TicketNFT.sol` o contratto dedicato) e scrivere i relativi test. Successivamente, adattare backend e frontend.
+13. Note di Debug Ambiente Test
+Durante lo sviluppo dei test Hardhat per Marketplace.sol (19/04/2025), è stato riscontrato un problema persistente nell'ambiente di esecuzione `npx hardhat test`. Un errore "incorrect number of arguments to constructor" impediva il deploy del contratto dipendente `TicketNFT` all'interno del blocco `beforeEach` del file `Marketplace.test.js`, nonostante il codice Solidity, la configurazione Hardhat e il codice di test apparissero corretti e funzionassero sia nella console interattiva (`npx hardhat console`) sia in file di test isolati. Il problema è stato risolto identificando una potenziale corruzione dello stato/cache interna di Hardhat legata al file di test originale e ricostruendo il file partendo da una base minimale funzionante. Questo non ha impattato la logica dei contratti ma ha richiesto tempo di debug ambientale.
+TicketNFT.sol (packages/contracts/contracts/TicketNFT.sol)
+Standard: ERC721 (OpenZeppelin v5.x).
+Ownership: Ownable (proprietario iniziale impostato nel costruttore).
+Contatore ID: Manuale (`_nextTokenId`).
+Dipendenze: Richiede l'indirizzo del contratto `Marketplace.sol` nel costruttore per leggere i parametri delle commissioni di servizio.
+
+Strutture Dati Chiave:
+* `ticketData(tokenId => TicketData)`: Memorizza `eventId`, `originalPrice`, `issuanceDate` per ogni NFT mintato.
+* `eventCreators(eventId => address payable)`: Mappa l'ID evento all'indirizzo del creatore che riceve il pagamento primario.
+* `eventOriginalPrices(eventId => uint256)`: Mappa l'ID evento al prezzo originale (in Wei) stabilito al momento della registrazione.
+
+Funzionalità Principali:
+* `constructor(name, symbol, initialOwner, marketplaceAddress)`: Inizializza il contratto.
+* `registerEvent(eventId, creatorAddress, originalPrice)`: (Solo Owner) Registra un nuovo evento on-chain, impostando chi riceverà i pagamenti e il prezzo del biglietto. Emette `EventRegistered`. Necessario prima che i biglietti per quell'evento possano essere acquistati tramite `buyAndMintTicket`.
+* `buyAndMintTicket(eventId)`: (Pubblica, Payable) Permette a chiunque di acquistare un biglietto per un evento registrato.
+    * Recupera prezzo e indirizzo creatore dalle mapping.
+    * Legge `serviceFeeBasisPoints` e `serviceWallet` dal contratto `Marketplace` associato.
+    * Calcola la commissione di servizio (stessa % del marketplace).
+    * Richiede `msg.value == prezzo + commissione`.
+    * Distribuisce i fondi: `prezzo` al `creatorAddress`, `commissione` al `serviceWallet`.
+    * Minta l'NFT all'acquirente (`msg.sender`).
+* `mintTicket(to, eventId, originalPrice)`: (Solo Owner) Funzione originale per mintare biglietti (senza flusso di pagamento diretto nel contratto). Utile per minting da backend/admin (es. biglietti omaggio, importazioni). Richiede che l'evento sia preferibilmente già registrato per coerenza dei dati. Chiama la logica di minting interna.
+* `_createTicket(to, eventId, originalPrice)`: (Interna) Logica condivisa per il minting effettivo e il salvataggio dei `ticketData`.
+Fase Attuale - Implementazione Flussi di Pagamento Reali & Test:
+[...]
+Scope Principale:
+Smart Contract (TicketNFT.sol, Marketplace.sol):
+    * `Marketplace.sol`: Logica acquisto P2P (`buyItem`) modificata per essere `payable`, calcolare commissione servizio (letta da variabili di stato configurabili da owner) e distribuire fondi a venditore e wallet servizio. Test completati e funzionanti (dopo debug ambiente). (FATTO)
+    * `TicketNFT.sol`: Modificato per includere logica acquisto primario (`buyAndMintTicket`) `payable`. Aggiunta registrazione eventi on-chain (`registerEvent`) con indirizzo creatore e prezzo. `buyAndMintTicket` legge commissione/wallet da `Marketplace` per coerenza e distribuisce fondi a creatore e wallet servizio prima di mintare. (IMPLEMENTATO, DA TESTARE)
+Test Smart Contract: Test per `Marketplace.sol` completati. Da scrivere test per le nuove funzionalità di `TicketNFT.sol` (`registerEvent`, `buyAndMintTicket`). (IN CORSO)
+Backend: [...] (Ancora da adattare)
+Frontend: [...] (Ancora da adattare)
+
+Prossimo Passo Immediato: Scrivere e eseguire i test Hardhat per le nuove funzionalità del contratto `TicketNFT.sol` (`registerEvent`, `buyAndMintTicket`).
+Fase Attuale - Integrazione Backend per Flussi Pagamento:
+[...]
+Scope Principale:
+Smart Contract (TicketNFT.sol, Marketplace.sol): [...] (Implementati e Testati)
+Test Smart Contract: Test per `Marketplace.sol` e `TicketNFT.sol` completati. (FATTO)
+Backend:
+    - Modificata API creazione eventi (`POST /api/events`) per chiamare `registerEvent` su `TicketNFT` on-chain dopo salvataggio DB, usando wallet owner e passando indirizzo creatore/prezzo. (IMPLEMENTATO E TESTATO CON SUCCESSO)
+    - Da adattare: Logica acquisto primario (`buyTicket` nel controller/service) per usare `buyAndMintTicket`. (DA FARE)
+    - Da adattare: Logica acquisto secondario (`buyItem` nel service) per gestire `msg.value`. (DA FARE)
+    - Da definire: API per esporre fee (opzionale). (DA FARE)
+Frontend: [...] (Ancora da adattare)
+
+Prossimo Passo Immediato: Verificare/Completare la configurazione Ethers.js nel backend (`config/ethers.js`) con ABI/indirizzo corretti per Amoy. Successivamente, testare end-to-end la creazione evento con registrazione on-chain. Poi, adattare le API di acquisto (primario e secondario).
+Nuovo indirizzo TicketNFT.sol:0x64afF703E9A973A55cf23ecb616768930454a2b6
+Nuovo indirizzo Marketplace.sol:0xDE1A30f6AC4093B78b0409ED08e47B67aE845732
+Prossimo Passo Immediato: Modificare eventController.js (buyTicket) e eventService.js (creare/modificare funzione per acquisto primario) per implementare la chiamata alla funzione buyAndMintTicket del contratto TicketNFT, includendo recupero chiave utente, calcolo valore totale (prezzo+fee) e invio della transazione payable: "Invece di modificare subito la funzione esistente (mintTicketForUser, se esiste), creeremo una nuova funzione asincrona chiamata purchasePrimaryTicket. Questo ci permette di costruire la nuova logica senza rompere quella vecchia (che comunque non useremo più per l'acquisto standard)." -> funzione implementata con successo in eventSuccess.js.
+Dopo questo ultimo passaggio: "Punto Chiave da Affrontare:
+
+La parte più complessa qui è userService.getUserSigner(userId). Come recuperi e decripti la chiave privata dell'utente? Hai già una logica per questo in userService.js o dobbiamo crearla? Questo dipende da come hai implementato la crittografia delle chiavi menzionata nel compendio ([source: 103]).
+"Cosa Manca per purchasePrimaryTicket:
+
+Guardando la logica che abbiamo definito per la nuova funzione purchasePrimaryTicket, mancano due import fondamentali:
+
+marketplaceContract: La nuova funzione deve leggere le commissioni (serviceFeeBasisPoints, serviceWallet) dal contratto Marketplace. Devi importare l'istanza del contratto Marketplace da config/ethers.js, esattamente come fai per ticketNFTContract.
+userService: La nuova funzione deve recuperare e decriptare la chiave privata dell'utente per creare il userSigner. Questa logica dovrebbe trovarsi nel tuo userService.js (o un file simile). Devi importare quel service.
+" -> risolto, vanno bene.
+Per ora, puoi aggiungere lo scheletro della funzione purchasePrimaryTicket e possiamo discutere di come implementare la parte getUserSigner o se usare temporaneamente un wallet diverso (come minterWallet) solo per testare il flusso della transazione on-chain."
+Conclusione:
+
+ethers.js è pronto e anche userService.js e cryptoUtilis.js
+Pronti per riavviare il backend e testare il flusso di acquisto primario (modificando prima il controller eventController.js per chiamare purchasePrimaryTicket invece della vecchia funzione).
+
+
+Fonti e contenuti correlati
+XX. Note Operative e Procedure Manuali
+
+Aggiornamento ABI Contratti nel Backend:
+ATTENZIONE: Dopo ogni modifica e ricompilazione degli smart contract (`npx hardhat compile` in `packages/contracts`), è NECESSARIO copiare manualmente i file JSON degli artifact aggiornati (es. `TicketNFT.json`, `Marketplace.json`) dalla directory `packages/contracts/artifacts/contracts/NomeContratto.sol/` alla directory utilizzata dal backend per caricare gli ABI (attualmente `packages/backend/src/contracts/abi/`). Sovrascrivere i file esistenti. La mancata esecuzione di questo passaggio causerà errori di runtime dovuti a disallineamento ABI.
+
+Flusso Acquisto Primario (buyAndMintTicket):
+Stato Attuale: La logica backend (`eventService.purchasePrimaryTicket`) tenta di recuperare la chiave privata criptata dell'utente (`encrypted_private_key` dalla tabella `users`), decriptarla per ottenere un signer, e usare quel signer per chiamare la funzione `payable buyAndMintTicket` del contratto `TicketNFT`.
+Problema Attuale: Il recupero della chiave privata fallisce per utenti esistenti che non hanno una `encrypted_private_key` valida nel database (risultando in un errore "Chiave privata criptata non trovata"). È necessario testare con un utente registrato tramite il flusso attuale che popola correttamente questo campo.
+TODO (Acquisto Primario): Implementare l'estrazione del `tokenId` mintato dai log della ricevuta di transazione e aggiornare correttamente le tabelle `tickets` (inserimento nuovo record) ed `events` (incremento `tickets_minted`) nel database dopo il successo della transazione on-chain all'interno della funzione `purchasePrimaryTicket`.
+**Configurazione Wallet Commissioni (Service Wallet):**
+
+La commissione di servizio (definita in basis points, es. 250 per 2.5%) calcolata sia per l'acquisto primario (`TicketNFT.sol`) sia per l'acquisto secondario (`Marketplace.sol`) viene trasferita automaticamente on-chain a un indirizzo designato ("Service Wallet").
+
+* **Lettura Dinamica:** L'indirizzo del Service Wallet e la percentuale di commissione NON sono hardcoded nel contratto `TicketNFT.sol`, ma vengono letti dinamicamente dal contratto `Marketplace.sol` associato al momento della transazione (`buyAndMintTicket` legge `serviceWallet()` e `serviceFeeBasisPoints()` da `Marketplace`).
+* **Configurabilità:** L'indirizzo del Service Wallet e la percentuale di commissione nel contratto `Marketplace.sol` possono essere modificati **solo dal proprietario (Owner)** del contratto `Marketplace.sol` chiamando le funzioni `setServiceWallet(address)` e `setServiceFeeBasisPoints(uint256)`.
+* **Verifica Attuale:** È importante verificare periodicamente che l'indirizzo configurato on-chain per `serviceWallet` nel contratto `Marketplace.sol` distribuito (`0xDE1A...` su Amoy) sia quello corretto dove la piattaforma intende ricevere le commissioni. (Al [2025-04-20], il log indicava `0x3564...`). Eventuali modifiche richiedono una transazione on-chain da parte dell'owner.
+TODO (Acquisto Primario):
+    [FATTO] Testare il flusso con un evento sicuramente registrato on-chain.
+    [FATTO] Implementare l'estrazione del `tokenId` mintato dai log della ricevuta di transazione.
+    [FATTO] Implementare l'aggiornamento delle tabelle `tickets` (INSERT) ed `events` (UPDATE `tickets_minted`) nel database dopo il successo della transazione on-chain all'interno di `purchasePrimaryTicket`.
+    [PENDING] Correggere visualizzazione `transactionHash` nel frontend (attualmente mostra "N/D"). Leggere `response.data.details.transactionHash`.
+	/api/events:
+  POST /: Crea un nuovo evento (Admin/Creator). Richiede `eventMgmtAuthMiddleware`.
+      - Salva i dettagli dell'evento nel database PostgreSQL.
+      - Avvia la registrazione dell'evento on-chain chiamando `registerEvent` sul contratto `TicketNFT` (usando il wallet owner del backend).
+      - **Risponde immediatamente (status 201)** con i dettagli dell'evento creato nel DB e l'hash della transazione on-chain inviata (`onChainTxHash`).
+      - La conferma effettiva della transazione on-chain viene gestita e loggata in background dal backend.
+	  10. Roadmap Immediata / Lavori in Corso
+
+[...]
+
+Implementazione Backend Acquisto P2P Marketplace: (PRIORITÀ ATTUALE)
+    - Obiettivo: Permettere a un utente di acquistare un biglietto listato da un altro utente.
+    - API Endpoint: Definire e implementare `POST /api/marketplace/buy/:listingId` (o simile), protetto da autenticazione (`authMiddleware`).
+    - Controller (`marketplaceController.js`): Creare la funzione `buyListing` per gestire la richiesta, estrarre `listingId` e `buyerUserId`, chiamare il service e gestire la risposta.
+    - Service (`marketplaceService.js`): Creare la funzione `purchaseSecondaryTicket(buyerUserId, listingId)`:
+        - Recuperare dettagli listing attivo dal DB (incl. `tokenId`, `seller_wallet_address`, `price`). Validare acquirente != venditore.
+        - Recuperare commissione (`serviceFeeBasisPoints`, `serviceWallet`) dal contratto `Marketplace.sol`.
+        - Calcolare costo totale (`listingPrice + serviceFee`).
+        - Ottenere il `signer` dell'acquirente (`userService.getUserSigner`). Verificare saldo.
+        - Chiamare la funzione `payable buyItem(tokenId)` del contratto `Marketplace.sol` con il signer dell'acquirente e il `msg.value` corretto.
+        - In caso di successo on-chain (`tx.wait(1)`):
+            - Aggiornare DB (in transazione): `UPDATE listings SET is_active = false`, `UPDATE tickets SET owner_user_id = ..., owner_wallet_address = ..., is_listed = false`.
+        - Gestire errori (listing non valido, fondi insufficienti, revert contratto, errori DB).
+        - Restituire dettagli transazione al controller.
+
+[...]
+Implementazione Backend Acquisto P2P Marketplace FATTO.
+Implementazione Frontend Acquisto P2P Marketplace FATTO.
+
+XX. Integrazione Wallet Esterno (Fase B - In Corso)
+
+Obiettivo Generale: Permettere agli utenti di utilizzare un wallet esterno (es. MetaMask), quando connesso e selezionato (preferenza 'external'), per firmare ed eseguire direttamente le transazioni blockchain rilevanti (acquisto primario, acquisto/vendita/annullamento P2P), e assicurare che i pagamenti degli eventi creati vadano all'indirizzo corretto (interno o esterno) scelto dal creatore.
+
+Piano di Implementazione (Fasi):
+
+* **Fase B.1: Frontend Marketplace P2P (IN CORSO)**
+    * **Obiettivo:** Modificare `MyTicketsView.vue` (per List/Cancel) e `MarketplaceView.vue` (per Buy P2P).
+    * **Logica:**
+        * Aggiungere controllo su `walletStore.isUsingExternalWallet`.
+        * Se `true`:
+            * Ottenere `signer` da `walletStore`.
+            * Ottenere ABI/Indirizzi dei contratti (`TicketNFT`, `Marketplace`) nel frontend.
+            * Creare istanze `ethers.Contract` connesse al `signer`.
+            * Chiamare le funzioni del contratto richieste (es. `nftContract.approve`, `marketContract.listItem`, `marketContract.cancelListing`, `marketContract.buyItem` con `{ value: ... }`).
+            * Attendere conferma transazione (`tx.wait()`).
+            * Aggiornare UI e/o notificare backend/store per refresh dati.
+        * Se `false`: Mantenere la logica esistente che chiama le azioni dell'`authStore` (es. `listTicketForSale`, `cancelListing`, `buyFromMarketplace`) che usano il backend per firmare.
+    * **Dipendenze:** `stores/wallet.js` (per stato e signer), accesso a ABI/Indirizzi contratti nel frontend.
+
+* **Fase B.2: Frontend Acquisto Primario (SUCCESSIVA)**
+    * **Obiettivo:** Modificare la vista/componente per l'acquisto primario (probabilmente `EventsView.vue`).
+    * **Logica:** Simile a B.1, ma per la funzione `buyAndMintTicket` del contratto `TicketNFT`.
+        * Se `isUsingExternalWallet` è `true`: Ottenere signer, creare istanza `TicketNFT`, calcolare costo totale (prezzo evento + fee letta da `Marketplace`), chiamare `ticketNFTContract.buyAndMintTicket(eventId, { value: totalCost })`, attendere conferma, aggiornare UI/dati (via refresh store o notifica backend).
+        * Se `false`: Mantenere logica esistente (`authStore.buyTicket`).
+
+* **Fase B.3: Backend Creazione Evento (SUCCESSIVA)**
+    * **Obiettivo:** Assicurare che il pagamento primario vada all'indirizzo corretto scelto dal creatore.
+    * **Logica:** Modificare `eventController.js` / `eventService.js`.
+        * Quando si gestisce `POST /api/events`, leggere `wallet_preference` e `external_wallet_address` (verificare esistenza colonna DB) dell'utente creatore (`req.user`).
+        * Determinare l'`creatorAddress` corretto da passare alla funzione `registerEvent` del contratto `TicketNFT`: se pref='external' usare `external_wallet_address`, altrimenti usare `wallet_address` interno.
+

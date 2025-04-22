@@ -1,47 +1,69 @@
-// Importiamo 'hre' (Hardhat Runtime Environment) per accedere alle funzionalità di Hardhat
+// packages/contracts/scripts/deploy.js - VERSIONE CORRETTA POST-MODIFICA TicketNFT.sol
+
 const hre = require("hardhat");
 
 async function main() {
-    // 1. Otteniamo l'account che farà il deploy (di solito il primo account fornito da Hardhat/nodo)
     const [deployer] = await hre.ethers.getSigners();
     console.log("Deploying contracts with the account:", deployer.address);
 
-    // Parametri per il costruttore di TicketNFT
-    const nftName = "Blockchain Tickets"; // Scegli un nome per la tua collezione NFT
-    const nftSymbol = "BCT";          // Scegli un simbolo
+    // --- PARAMETRI DA CONFIGURARE ---
+    const nftName = "Blockchain Tickets"; // Nome NFT
+    const nftSymbol = "BCT";           // Simbolo NFT
+    // Per il costruttore del Marketplace:
+    const initialFeeBps = 250; // Esempio: 2.5% (250 basis points) - IMPOSTA IL VALORE DESIDERATO
+    const initialServiceWallet = deployer.address; // Esempio: usa l'indirizzo del deployer come wallet servizio iniziale - IMPOSTA L'INDIRIZZO DESIDERATO
+    // --- FINE PARAMETRI ---
 
-    // 2. Deploy del contratto TicketNFT
+
+    // 1. Deploy del contratto TicketNFT PRIMA
+    //    Passiamo un indirizzo VALIDO ma temporaneo per marketplaceAddress,
+    //    useremo l'indirizzo del deployer stesso, sapendo che lo cambieremo subito dopo.
+    //    Questo soddisfa il require nel costruttore di TicketNFT.
     console.log(`Deploying TicketNFT (${nftName}, ${nftSymbol})...`);
     const TicketNFT = await hre.ethers.getContractFactory("TicketNFT");
-    // Passiamo nome, simbolo e l'indirizzo del deployer come initialOwner
-    const ticketNFT = await TicketNFT.deploy(nftName, nftSymbol, deployer.address);
-
-    // Attendiamo che il deploy sia finalizzato sulla blockchain
-    // In ethers v6 si usa .waitForDeployment()
+    const ticketNFT = await TicketNFT.deploy(
+        nftName,
+        nftSymbol,
+        deployer.address,    // initialOwner
+        deployer.address     // _marketplaceAddress TEMPORANEO (verrà aggiornato)
+    );
     await ticketNFT.waitForDeployment();
-    const ticketNFTAddress = ticketNFT.target; // Otteniamo l'indirizzo del contratto deployato
+    const ticketNFTAddress = ticketNFT.target;
     console.log("TicketNFT deployed to:", ticketNFTAddress);
 
-    // 3. Deploy del contratto Marketplace
+
+    // 2. Deploy del contratto Marketplace DOPO
+    //    Ora possiamo passare l'indirizzo TicketNFT reale al suo costruttore.
     console.log("Deploying Marketplace...");
     const Marketplace = await hre.ethers.getContractFactory("Marketplace");
-    // Passiamo l'indirizzo del TicketNFT appena deployato al costruttore del Marketplace
-    const marketplace = await Marketplace.deploy(ticketNFTAddress);
-
-    // Attendiamo che il deploy sia finalizzato
+    const marketplace = await Marketplace.deploy(
+        ticketNFTAddress,          // _ticketNFTAddress (l'indirizzo appena deployato)
+        initialFeeBps,             // _initialFeeBasisPoints
+        initialServiceWallet       // _initialServiceWallet
+    );
     await marketplace.waitForDeployment();
-    const marketplaceAddress = marketplace.target; // Otteniamo l'indirizzo
+    const marketplaceAddress = marketplace.target;
     console.log("Marketplace deployed to:", marketplaceAddress);
 
-    console.log("\nDeployment complete!");
+
+    // 3. CHIAMA LA NUOVA FUNZIONE SETTER su TicketNFT per impostare l'indirizzo Marketplace CORRETTO
+    console.log(`Setting correct Marketplace address (${marketplaceAddress}) in TicketNFT contract...`);
+    // Chiama la funzione setMarketplaceAddress usando l'account deployer (che è l'owner)
+    const setTx = await ticketNFT.connect(deployer).setMarketplaceAddress(marketplaceAddress);
+    // Aspetta che la transazione venga minata
+    await setTx.wait(1); // Aspetta 1 conferma
+    console.log("Marketplace address set successfully in TicketNFT.");
+
+
+    console.log("\n--- Deployment Completo ---");
+    console.log("   Deployer Address:  ", deployer.address);
+    console.log("   Marketplace Address:", marketplaceAddress);
+    console.log("   TicketNFT Address:  ", ticketNFTAddress);
     console.log("----------------------------------------------------");
-    console.log("TicketNFT Address:", ticketNFTAddress);
-    console.log("Marketplace Address:", marketplaceAddress);
-    console.log("Deployer Address:", deployer.address);
+    console.log("!!! RICORDA DI AGGIORNARE GLI INDIRIZZI E L'ABI NEL BACKEND !!!");
     console.log("----------------------------------------------------");
 }
 
-// Pattern standard per eseguire la funzione main e gestire gli errori
 main().catch((error) => {
     console.error(error);
     process.exitCode = 1;

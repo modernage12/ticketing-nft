@@ -1,7 +1,8 @@
 const { pool } = require('../config/db'); // Importiamo il pool di connessioni DB
 const bcrypt = require('bcrypt');
 const { ethers } = require('ethers'); // Per generare il wallet address
-const { encrypt } = require('../utils/cryptoUtils'); // <-- Importa encrypt dalla nostra utility
+const { encrypt, decrypt } = require('../utils/cryptoUtils'); // <-- Importa encrypt dalla nostra utility
+const { provider } = require('../config/ethers');
 
 const SALT_ROUNDS = 10; // Costo computazionale per l'hashing bcrypt
 
@@ -107,9 +108,74 @@ const updateUserWalletPreference = async (userId, walletPreference) => {
     }
 };
 
+// --- INIZIO NUOVA FUNZIONE getUserSigner ---
+
+/**
+ * Recupera la chiave privata criptata di un utente dal DB, la decripta
+ * e restituisce un oggetto Wallet (Signer) di Ethers.js.
+ * @param {number} userId L'ID dell'utente.
+ * @returns {Promise<ethers.Wallet>} Oggetto Wallet/Signer connesso al provider.
+ * @throws Se l'utente non viene trovato, la chiave non è disponibile/decriptabile, o errore DB/crypto.
+ */
+const getUserSigner = async (userId) => {
+    console.log(`userService: Tentativo di ottenere signer per userId: ${userId}`);
+
+    // 1. Trova la chiave privata criptata nel DB
+    const query = 'SELECT encrypted_private_key FROM users WHERE user_id = $1';
+    let encryptedKeyData;
+    try {
+        const result = await pool.query(query, [userId]);
+        if (result.rows.length === 0) {
+            throw new Error(`Utente con ID ${userId} non trovato.`);
+        }
+        if (!result.rows[0].encrypted_private_key) {
+             throw new Error(`Chiave privata criptata non trovata per l'utente ${userId}.`);
+        }
+        encryptedKeyData = result.rows[0].encrypted_private_key;
+        // Nota: encryptedKeyData qui è probabilmente l'oggetto { iv: '...', content: '...' } restituito da encrypt
+        console.log(`userService: Chiave criptata recuperata per userId: ${userId}`);
+
+    } catch (dbError) {
+        console.error(`userService: Errore DB recupero chiave per userId ${userId}:`, dbError);
+        throw new Error('Errore database durante recupero dati utente.');
+    }
+
+    // 2. Decripta la chiave privata
+    let decryptedPrivateKey;
+    try {
+        // Chiama la funzione decrypt (assumendo che esista e funzioni correttamente)
+        decryptedPrivateKey = decrypt(encryptedKeyData);
+        if (!decryptedPrivateKey || !decryptedPrivateKey.startsWith('0x')) {
+             throw new Error('Decriptazione chiave fallita o formato non valido.');
+        }
+        console.log(`userService: Chiave privata decriptata con successo per userId: ${userId}`);
+    } catch (decryptError) {
+        console.error(`userService: Errore decrittografia chiave per userId ${userId}:`, decryptError);
+        throw new Error('Errore durante la decrittografia della chiave privata.');
+    }
+
+    // 3. Crea l'oggetto Wallet/Signer Ethers.js
+    try {
+        if (!provider) {
+            throw new Error("Provider Ethers non disponibile/importato in userService.");
+        }
+        // Crea il wallet usando la chiave decifrata e il provider importato
+        const userWallet = new ethers.Wallet(decryptedPrivateKey, provider);
+        console.log(`userService: Signer creato per indirizzo ${userWallet.address} (userId: ${userId})`);
+        return userWallet; // Restituisce l'oggetto Wallet (che è un Signer)
+
+    } catch (walletError) {
+        console.error(`userService: Errore creazione Wallet Ethers per userId ${userId}:`, walletError);
+        throw new Error('Errore durante la creazione del signer utente.');
+    }
+};
+
+// --- FINE NUOVA FUNZIONE getUserSigner ---
+
 
 module.exports = {
     createUser,
     findUserByUsername, // Assicurati sia esportato
-    updateUserWalletPreference
+    updateUserWalletPreference,
+    getUserSigner
 };
