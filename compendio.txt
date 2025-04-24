@@ -632,3 +632,106 @@ Prossimo Passo Sviluppo (Fase B.1):
 Implementare la logica completa per handleCancelListing in MyTicketsView.vue per wallet esterni (inclusi gasPrice workaround, wait(1), e chiamata a nuova API backend di notifica /notify-external-cancel). Richiede creazione endpoint/logica backend.
 (Opzionale/Verifica) Assicurare che handleBuy in MarketplaceView.vue notifichi il backend dopo un acquisto esterno riuscito (creando endpoint/logica se necessario).
 (Parallelo/Successivo) Risolvere il problema della mancata visualizzazione dei biglietti/listing associati al wallet esterno nelle viste "I Miei Biglietti" e "Marketplace".
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+
+Backend API (GET /api/tickets/my-tickets): Modificato il controller (ticketController.js) per accettare un parametro query opzionale wallet_address. Se presente, l'API cerca i biglietti nel DB usando questo indirizzo (filtrando tickets.owner_wallet_address). Se assente, usa l'indirizzo interno predefinito associato all'utente loggato (req.user.walletAddress). Il service (ticketService.findTicketsByOwner) non ha richiesto modifiche.
+Prossimo Passo Sviluppo: Modificare l'azione fetchMyTickets nello store Pinia del frontend per inviare il parametro ?wallet_address=0x... quando l'utente sta usando un wallet esterno.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+
+Backend API (GET /api/tickets/my-tickets): Modificata per supportare il recupero biglietti tramite ?wallet_address=0x....
+Prossimo Passo Sviluppo: Modificare l'azione Pinia (fetchMyTickets in stores/auth.js?) nel frontend per inviare il parametro wallet_address quando si usa un wallet esterno, al fine di visualizzare correttamente i biglietti posseduti dall'indirizzo esterno.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+
+Backend API (GET /api/tickets/my-tickets): Modificata per supportare ?wallet_address=0x....
+Frontend Store: Modificata l'azione fetchMyTickets (in stores/auth.js?) per:
+Controllare walletStore.isUsingExternalWallet.
+Se true, aggiungere ?wallet_address=<indirizzo_esterno> all'URL della chiamata API a /api/tickets/my.
+Se false, chiamare l'URL base /api/tickets/my.
+Prossimo Passo Sviluppo: Testare la visualizzazione dei biglietti nell'UI (MyTicketsView.vue) sia con wallet interno che con wallet esterno per confermare che vengano mostrati i dati corretti in entrambi i casi.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+
+Backend API (GET /api/tickets/my-tickets): Modificata per supportare ?wallet_address=0x....
+Frontend Store: Modificata l'azione fetchMyTickets (in stores/auth.js) per:
+    - Controllare walletStore.isUsingExternalWallet E walletStore.account.
+    - Se entrambi validi, aggiungere ?wallet_address=<indirizzo_esterno> all'URL API.
+    - Se walletStore.isUsingExternalWallet è true MA walletStore.account non è disponibile, skippare il fetch e impostare un errore.
+    - Se walletStore.isUsingExternalWallet è false e token JWT esiste, chiamare l'URL base /api/tickets/my.
+    - In tutti gli altri casi o se manca contesto, skippare il fetch. (FATTO - Correzione logica 24/04)
+Prossimo Passo Sviluppo: Testare la visualizzazione dei biglietti nell'UI (MyTicketsView.vue) sia con wallet interno che con wallet esterno per confermare che vengano mostrati i dati corretti (o l'errore appropriato) in tutti i casi.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+
+Backend API (GET /api/tickets/my-tickets): Modificata per supportare ?wallet_address=0x....
+Frontend Store (`fetchMyTickets` in stores/auth.js): Logica corretta per gestire i contesti interno/esterno e la disponibilità dell'indirizzo esterno. (FATTO)
+Frontend Componente (`MyTicketsView.vue`): Attualmente chiama `fetchMyTickets` solo in `onMounted`. Questo causa un errore visualizzato all'utente quando si usa il wallet esterno perché l'indirizzo non è ancora disponibile al momento del mount. (PROBLEMA IDENTIFICATO)
+Prossimo Passo Sviluppo: Implementare un watcher (`watch` o `watchEffect`) in `MyTicketsView.vue` per rendere il caricamento dei biglietti reattivo ai cambiamenti dello stato del `walletStore` (es. `account`, `isUsingExternalWallet`), assicurando che `fetchMyTickets` venga chiamato quando il contesto è valido.
+
+Fonti e contenuti correlati
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+
+Backend API (GET /api/tickets/my-tickets): Modificata per supportare ?wallet_address=0x.... (FATTO)
+Frontend Store (`WorkspaceMyTickets` in stores/auth.js): Logica corretta per gestire i contesti interno/esterno e la disponibilità dell'indirizzo esterno. (FATTO)
+Frontend Componente (`MyTicketsView.vue`): Implementato `watchEffect` per chiamare `WorkspaceMyTickets` reattivamente quando lo stato di autenticazione e/o del wallet esterno cambiano e permettono il caricamento. (FATTO)
+Prossimo Passo Sviluppo: Testare end-to-end la visualizzazione dei biglietti in `MyTicketsView.vue` in tutti gli scenari (login interno, login esterno senza connessione wallet, login esterno con connessione wallet). Verificare che i dati vengano caricati/aggiornati correttamente.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+[...]
+Frontend Componente (`MyTicketsView.vue`): `watchEffect` chiama correttamente `fetchMyTickets` quando le condizioni sono soddisfatte. I dati vengono caricati nello store (`authStore.myTickets`) per il caso del wallet interno. Tuttavia, la pagina rimane bianca, indicando un errore di rendering nel template HTML del componente. (PROBLEMA IDENTIFICATO)
+Prossimo Passo Sviluppo: Debuggare la sezione `<template>` di `MyTicketsView.vue` per trovare l'errore JavaScript che impedisce la visualizzazione dei dati caricati (es. accesso a proprietà inesistenti nel `v-for`, errori nelle funzioni di formattazione, etc.).
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+[...]
+Frontend Componente (`MyTicketsView.vue`): Con `watchEffect` corretto e template originale, la visualizzazione dei biglietti per il **wallet interno funziona**. (FATTO)
+Prossimo Passo Sviluppo: Testare end-to-end lo scenario del **wallet esterno**: verificare che dopo la connessione del wallet, `watchEffect` venga riattivato, chiami `fetchMyTickets` con il parametro `?wallet_address=...`, l'API risponda correttamente e i biglietti dell'indirizzo esterno vengano visualizzati nel componente.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+[...]
+Frontend Componente (`MyTicketsView.vue`): `watchEffect` aggiornato per svuotare la lista biglietti (`authStore.myTickets`) se la preferenza è esterna ma l'indirizzo non è ancora disponibile, prevenendo la visualizzazione di dati errati. (FATTO)
+Problema Residuo: L'aggiornamento reattivo dopo la connessione del wallet esterno non sembra funzionare (manca il fetch con `?wallet_address=...`).
+Prossimo Passo Sviluppo: Verificare come lo stato `account` in `stores/wallet.js` viene aggiornato alla connessione e assicurarsi che questo aggiornamento triggeri correttamente il `watchEffect` in `MyTicketsView.vue` per avviare il fetch dei biglietti esterni.
+
+Fonti e contenuti correlati
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+[...]
+Frontend Componente (`MyTicketsView.vue`): `watchEffect` corretto per osservare `walletStore.connectedAddress`. (FATTO)
+Problema Residuo: Da verificare se l'aggiornamento reattivo ora funziona correttamente.
+Prossimo Passo Sviluppo: Testare se, dopo la connessione del wallet esterno, il `watchEffect` corretto viene riattivato, chiama `fetchMyTickets` con il parametro `?wallet_address=...` e i biglietti esterni vengono caricati e visualizzati.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+[...]
+Frontend Store (`fetchMyTickets` in stores/auth.js): Modificato per accettare parametro opzionale `externalAddressOverride` e usarlo con priorità per determinare l'URL API. (FATTO)
+Frontend Componente (`MyTicketsView.vue`): `watchEffect` modificato per passare `walletStore.connectedAddress` come parametro a `fetchMyTickets` quando le condizioni per il fetch esterno sono soddisfatte. (FATTO)
+Prossimo Passo Sviluppo: Testare se la chiamata API con `?wallet_address=...` viene ora eseguita correttamente dopo la connessione del wallet esterno e se i relativi biglietti vengono visualizzati.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+[...]
+Frontend Componente (`MyTicketsView.vue`): `watchEffect` chiama correttamente `fetchMyTickets` con l'indirizzo esterno dopo la connessione. (VERIFICATO)
+API Backend (`GET /api/tickets/my?wallet_address=`): La chiamata per l'indirizzo esterno `0x356...` ha successo ma restituisce 0 biglietti. (VERIFICATO - Da investigare backend/DB)
+Frontend Store (`wallet.js`): Un evento imprevisto `accountsChanged[]` causa la chiamata a `resetState`. `resetState` è stato corretto per non modificare `isUsingExternalWallet`, ma solo lo stato di connessione. (CORRETTO)
+Problema Residuo: 1) Verificare perché l'API non restituisce biglietti per l'indirizzo esterno. 2) Capire la causa dell'evento `accountsChanged[]` imprevisto.
+Prossimo Passo Sviluppo: 1) Investigare database e logica API backend per il recupero biglietti tramite `wallet_address`. 2) Ritestare il flusso di connessione esterna dopo la correzione di `resetState` per osservare il comportamento in caso di disconnessione imprevista.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+[...]
+Frontend Componente (`MyTicketsView.vue`): Chiama correttamente l'API backend con `?wallet_address=` dopo la connessione esterna. (VERIFICATO)
+API Backend (`GET /api/tickets/my?wallet_address=`): La chiamata ha successo (200 OK) ma restituisce un array vuoto []. (PROBLEMA ATTUALE)
+Database: Contiene almeno un biglietto (`token_id 9`) per l'indirizzo esterno testato (`0x356...`). (VERIFICATO)
+Problema Residuo: Discrepanza tra dati DB e risposta API. L'errore risiede nella logica backend che gestisce il recupero dei biglietti filtrati per `wallet_address`.
+Prossimo Passo Sviluppo: Ispezionare e debuggare il codice backend in `ticketController.js` e `ticketService.js`, in particolare la costruzione e l'esecuzione della query SQL per `findTicketsByOwner` quando viene passato un `wallet_address`. Verificare case-sensitivity e correttezza del filtro.
+
+Fonti e contenuti correlati
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Visibilità UI)
+[...]
+API Backend (`GET /api/tickets/my?wallet_address=`): Corretta query SQL per confronto case-insensitive. (RISOLTO)
+Frontend Componente (`MyTicketsView.vue`): `watchEffect` passa correttamente l'indirizzo esterno a `WorkspaceMyTickets`. (VERIFICATO)
+Stato Funzionale: La visualizzazione dei biglietti in `MyTicketsView.vue` funziona correttamente sia per gli utenti con wallet interno sia per quelli con wallet esterno connesso. L'aggiornamento è reattivo alla connessione/disconnessione del wallet esterno. (FUNZIONANTE)
+Prossimo Passo Sviluppo (per questa feature): Implementare notifica backend per cancellazione listing esterno (`handleCancelListing`), pulire codice di debug, testare a fondo.
+Stato Attuale (Compendio - Sezione Gestione Wallet)
+[...]
+Frontend Componente (`SettingsView.vue`): Il passaggio da modalità esterna a interna tramite UI non aggiorna lo stato reattivo `isUsingExternalWallet` immediatamente. Probabilmente il gestore eventi del pulsante chiama ancora `disconnectWallet` invece della nuova azione `switchToInternalMode`. (PROBLEMA ATTUALE)
+Prossimo Passo Sviluppo: Verificare/Modificare il gestore eventi del pulsante "Usa Wallet Interno" in `SettingsView.vue` per chiamare `walletStore.switchToInternalMode()`. Fornire codice di `SettingsView.vue` se necessario.
+Stato Attuale (Compendio - Sezione Gestione Wallet)
+[...]
+Frontend Componente (`SettingsView.vue`): Corretta la funzione `switchToInternal` per chiamare `walletStore.switchToInternalMode()`. L'aggiornamento della UI durante lo switch a modalità interna dovrebbe ora essere immediato. (CORRETTO)
+Prossimo Passo Sviluppo: Testare il funzionamento dello switch da esterno a interno in `SettingsView.vue` dopo la correzione.
+
+Fonti e contenuti correlati
+Stato Funzionale (Compendio - Sezione Gestione Wallet / Visibilità UI)
+
+Visualizzazione Biglietti (`MyTicketsView.vue`): FUNZIONANTE. La pagina carica e mostra correttamente i biglietti sia per il wallet interno sia per il wallet esterno connesso. L'aggiornamento è reattivo alla connessione/disconnessione e allo switch di modalità.
+Switch Modalità Wallet (`SettingsView.vue`): FUNZIONANTE. Il passaggio tra modalità interna ed esterna aggiorna correttamente lo stato reattivo e la UI senza richiedere refresh manuali.
+Recupero Dati Backend (`GET /api/tickets/my`): FUNZIONANTE. L'endpoint recupera correttamente i biglietti sia tramite ID utente JWT (interno) sia tramite `?wallet_address=` (esterno, case-insensitive).
+TODO Minori: Implementare notifica backend per cancellazione listing esterno (`handleCancelListing` in `MyTicketsView.vue`), pulire codice di debug.

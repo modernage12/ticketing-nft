@@ -25,6 +25,18 @@ export const useWalletStore = defineStore('wallet', () => {
     }
   }
 
+   // === NUOVA AZIONE ===
+  // Azione specifica per quando l'utente SCEGLIE di usare il wallet interno
+  function switchToInternalMode() {
+    console.log(">>> WalletStore: Azione switchToInternalMode chiamata.");
+    // 1. Resetta lo stato della connessione esterna (indirizzo, signer, listeners)
+    resetState(); // Chiama la nostra funzione di reset esistente (che NON tocca più isUsingExternalWallet)
+    // 2. Imposta esplicitamente che NON stiamo più usando il wallet esterno
+    isUsingExternalWallet.value = false;
+    console.log(">>> WalletStore: Impostato isUsingExternalWallet a false.");
+    // Nota: La preferenza 'internal' viene salvata nel DB dall'azione dell'authStore chiamata da SettingsView
+  }
+
 // === NUOVA VERSIONE SEMPLIFICATA DI ensureSigner ===
 async function ensureSigner() {
   console.log('EnsureSigner (SEMPLIFICATO): Controllo richiesto...');
@@ -175,25 +187,23 @@ async function ensureSigner() {
   }
 
   function resetState() {
-      console.log('Resetto stato wallet e rimuovo listeners...')
-      connectedAddress.value = null
-      provider.value = null
-      signer.value = null
-      error.value = null
-      isUsingExternalWallet.value = false // Resettiamo anche questo
+    console.log('Resetto stato connessione wallet e rimuovo listeners...')
+    connectedAddress.value = null
+    provider.value = null
+    signer.value = null
+    error.value = null
+    // !!! NON resettare isUsingExternalWallet qui !!!
+    // isUsingExternalWallet.value = false; // <-- RIMUOVI O COMMENTA QUESTA RIGA
 
-      // --- MODIFICA: Rimuoviamo i listener ---
-      // Controlliamo che window.ethereum e le funzioni esistano prima di chiamarle
-      if (window.ethereum && typeof window.ethereum.removeListener === 'function') {
-          console.log('Rimuovo listeners per accountsChanged e chainChanged.')
-          // Usare .off() è un alias comune per .removeListener
-          window.ethereum.removeListener('accountsChanged', handleAccountsChanged)
-          window.ethereum.removeListener('chainChanged', handleChainChanged)
-      } else {
-          console.log('window.ethereum o removeListener non disponibili durante il reset.')
-      }
-      // -----------------------------------
-  }
+    // Rimuoviamo i listener
+    if (window.ethereum && typeof window.ethereum.removeListener === 'function') {
+        console.log('Rimuovo listeners per accountsChanged e chainChanged.')
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged)
+        window.ethereum.removeListener('chainChanged', handleChainChanged)
+    } else {
+        console.log('window.ethereum o removeListener non disponibili durante il reset.')
+    }
+}
 
   // Funzioni placeholder per il futuro
   // function setUsingExternalWallet(useExternal: boolean) { isUsingExternalWallet.value = useExternal; }
@@ -210,7 +220,8 @@ async function ensureSigner() {
     connectWallet,
     disconnectWallet,
     ensureSigner,
-    initializePreference
+    initializePreference,
+    switchToInternalMode
     // setUsingExternalWallet,
   }
 })

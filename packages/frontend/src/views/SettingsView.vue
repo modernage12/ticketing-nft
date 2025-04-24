@@ -42,27 +42,30 @@ const switchToExternal = async () => {
 };
 
 const switchToInternal = async () => {
-  console.log("SettingsView: Tentativo di passare a Wallet Interno...");
-  apiError.value = null;
-  try {
-    // 1. Disconnetti il wallet (aggiorna stato FE wallet)
-    walletStore.disconnectWallet(); // Questa è sincrona
+    console.log("SettingsView: Tentativo di passare a Wallet Interno...");
+    apiError.value = null;
+    try {
+        // 1. Chiama la NUOVA azione specifica per lo switch a interno
+        //    Questa azione resetta la connessione E imposta isUsingExternalWallet = false
+        walletStore.switchToInternalMode(); // <<<===== CORREZIONE QUI
 
-    console.log("SettingsView: Stato DOPO disconnectWallet -> isExternalMode:", isExternalMode.value, "isUsingExternalWallet:", walletStore.isUsingExternalWallet);
+        console.log("SettingsView: Stato DOPO switchToInternalMode -> isExternalMode:", isExternalMode.value, "isUsingExternalWallet:", walletStore.isUsingExternalWallet); // Log aggiornato
 
-    // 2. Salva la preferenza 'internal' nel backend
-    console.log("SettingsView: Chiamo azione API per salvare preferenza 'internal'");
-     try {
-        await authStore.updateWalletPreferenceAPI('internal');
-        console.log("SettingsView: Azione API per salvare 'internal' completata con successo.");
-     } catch (err) {
-        console.error("Errore dall'azione updateWalletPreferenceAPI('internal'):", err.message);
-        apiError.value = err.message || "Errore nel salvare la preferenza.";
-     }
-  } catch (error) {
-      console.error("Errore inatteso in switchToInternal:", error);
-      apiError.value = "Errore imprevisto durante il passaggio al wallet interno.";
-  }
+        // 2. Salva la preferenza 'internal' nel backend (come prima)
+        console.log("SettingsView: Chiamo azione API per salvare preferenza 'internal'");
+         try {
+            await authStore.updateWalletPreferenceAPI('internal');
+            console.log("SettingsView: Azione API per salvare 'internal' completata con successo.");
+         } catch (err) {
+            console.error("Errore dall'azione updateWalletPreferenceAPI('internal'):", err.message);
+            apiError.value = err.message || "Errore nel salvare la preferenza.";
+            // Potresti voler gestire il caso in cui l'API fallisce (es. ripristinare lo stato precedente?)
+         }
+    } catch (error) {
+        // Questo catch potrebbe non essere più necessario se switchToInternalMode non lancia errori
+        console.error("Errore inatteso in switchToInternal:", error);
+        apiError.value = "Errore imprevisto durante il passaggio al wallet interno.";
+    }
 };
 
 </script>

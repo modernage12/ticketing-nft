@@ -3,21 +3,47 @@ const ticketService = require('../services/ticketService');
 const marketplaceService = require('../services/marketplaceService');
 
 /**
- * Controller per ottenere i biglietti posseduti dall'utente autenticato.
+ * Controller per ottenere i biglietti posseduti dall'utente autenticato
+ * o da un indirizzo wallet specifico fornito come query parameter.
  */
-const getMyTickets = async (req, res) => {
+const getMyTickets = async (req, res, next) => { // Aggiunto 'next' per gestione errori migliore
     try {
-        const userId = req.user.userId;
-        const userWalletAddress = req.user.walletAddress;
-        if (!userWalletAddress) return res.status(400).json({ error: 'Indirizzo wallet non trovato.' });
-        // Usiamo ticketService per trovare i biglietti
-        const tickets = await ticketService.findTicketsByOwner(userWalletAddress);
+        let addressToQuery;
+
+        // Controlla se è stato fornito un indirizzo specifico nella query string
+        // Esempio URL frontend: /api/tickets/my?wallet_address=0x.....
+        if (req.query.wallet_address) {
+            console.log(`>>> getMyTickets Controller: Ricevuto wallet_address da query: ${req.query.wallet_address}`);
+            // Qui potremmo aggiungere validazione per verificare che sia un indirizzo valido
+            // e potenzialmente verificare che l'utente loggato sia autorizzato a vedere
+            // i dati di questo indirizzo (se implementassimo l'associazione user <-> external_wallet).
+            // Per ora, usiamo l'indirizzo fornito se presente.
+            addressToQuery = req.query.wallet_address;
+        } else {
+            // Se non c'è indirizzo nella query, usa l'indirizzo interno associato all'utente JWT
+            console.log(`>>> getMyTickets Controller: Nessun wallet_address nella query, uso l'indirizzo interno dell'utente JWT.`);
+            addressToQuery = req.user.walletAddress; // Indirizzo wallet INTERNO da authMiddleware
+             if (!addressToQuery) {
+                console.error(">>> getMyTickets Controller: Indirizzo wallet interno non trovato in req.user");
+                return res.status(400).json({ error: 'Indirizzo wallet interno non trovato per l\'utente.' });
+             }
+        }
+
+        console.log(`>>> getMyTickets Controller: Chiamo ticketService.findTicketsByOwner con indirizzo: ${addressToQuery}`);
+        const tickets = await ticketService.findTicketsByOwner(addressToQuery);
+        console.log(`>>> getMyTickets Controller: Trovati ${tickets.length} biglietti per l'indirizzo ${addressToQuery}`);
+
         res.status(200).json(tickets);
+
     } catch (error) {
-        console.error("Errore in getMyTickets controller:", error);
-        res.status(500).json({ error: error.message || 'Errore recupero biglietti.' });
+        console.error(">>> ERRORE nel controller getMyTickets:", error);
+        // Passiamo l'errore al middleware di gestione errori generale (se ne hai uno)
+        // o restituiamo un errore generico
+        // next(error); // Se hai un error handler middleware
+         res.status(500).json({ error: error.message || 'Errore durante il recupero dei biglietti.' });
     }
 };
+
 
 /**
  * Controller per mettere in vendita un biglietto specifico posseduto dall'utente.

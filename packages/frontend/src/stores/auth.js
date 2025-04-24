@@ -190,24 +190,79 @@ export const useAuthStore = defineStore('auth', () => {
 
     // --- Funzioni Fetch Dati (Corrette e Resilienti) ---
 
-     async function fetchMyTickets() {
-        console.log(">>> fetchMyTickets ACTION CALLED");
-        if (!token.value) { myTickets.value = []; /* console.warn("fetchMyTickets: No token"); */ return; }
-        myTicketsLoading.value = true; myTicketsError.value = null;
-        try {
-            console.log(`>>> fetchMyTickets: Chiamo API a ${TICKETS_API_URL}/my`);
-            const response = await axios.get(`${TICKETS_API_URL}/my`, authHeader.value );
-            myTickets.value = response.data;
-            console.log(">>> fetchMyTickets: Biglietti recuperati:", myTickets.value.length);
-        } catch (err) {
-            console.error(">>> Errore fetchMyTickets:", err.response?.data || err.message);
-            myTicketsError.value = err.response?.data?.error || 'Errore recupero biglietti (mostro dati vecchi).';
-            if (err.response?.status === 401 || err.response?.status === 403) { await logout(); }
-        } finally {
-            console.log(">>> fetchMyTickets: Eseguo finally block");
-            myTicketsLoading.value = false;
+    async function fetchMyTickets(externalAddressOverride = null) {
+        console.log(`>>> fetchMyTickets ACTION CALLED (Override: ${externalAddressOverride})`); // Log del parametro
+        const walletStore = useWalletStore(); // Ottieni istanza store wallet
+
+        myTicketsLoading.value = true;
+        myTicketsError.value = null;
+        let apiUrl = `${TICKETS_API_URL}/my`;
+        let canFetch = false;
+        let contextUsed = 'unknown'; // Per logging
+
+        // Determina contesto e URL
+        // Priorità al parametro passato, se presente
+        if (externalAddressOverride) {
+             console.log(`>>> fetchMyTickets: Using EXTERNAL wallet via override: ${externalAddressOverride}`);
+             apiUrl = `${TICKETS_API_URL}/my?wallet_address=${externalAddressOverride}`;
+             canFetch = true;
+             contextUsed = 'external (override)';
+        } else if (walletStore.isUsingExternalWallet) {
+            // Altrimenti, controlla lo stato dello store wallet
+            const currentExternalAccount = walletStore.connectedAddress; // Usa la variabile corretta
+            if (currentExternalAccount) {
+                console.log(`>>> fetchMyTickets: Using EXTERNAL wallet from store: ${currentExternalAccount}`);
+                apiUrl = `${TICKETS_API_URL}/my?wallet_address=${currentExternalAccount}`;
+                canFetch = true;
+                contextUsed = 'external (store)';
+            } else {
+                console.warn(">>> fetchMyTickets: Skip - External wallet selected but account address not available in store (and no override).");
+                myTicketsError.value = "Collega il tuo wallet esterno o attendi che l'indirizzo sia disponibile.";
+                myTickets.value = []; // Svuota lista
+                // canFetch rimane false
+                contextUsed = 'external (skipped)';
+            }
+        } else {
+            // Se non esterno, controlla se usare interno via JWT
+            if (token.value) {
+                console.log(`>>> fetchMyTickets: Using INTERNAL wallet (JWT user).`);
+                // apiUrl rimane base
+                canFetch = true;
+                contextUsed = 'internal (store)';
+            } else {
+                console.warn(">>> fetchMyTickets: Skip - Internal wallet selected but no JWT token found.");
+                 myTickets.value = []; // Svuota lista
+                // canFetch rimane false
+                 contextUsed = 'internal (skipped)';
+            }
         }
-     }
+
+        if (!canFetch) {
+             myTicketsLoading.value = false;
+             console.log(`>>> fetchMyTickets: Aborting fetch because context is not valid (${contextUsed}).`);
+             return;
+        }
+
+        // Esegui fetch solo se canFetch è true
+        try {
+             console.log(`>>> fetchMyTickets: Attempting API call to ${apiUrl} (Context: ${contextUsed})`);
+             const config = token.value ? authHeader.value : {}; // Passa sempre header se c'è token
+             const response = await axios.get(apiUrl, config);
+             myTickets.value = response.data;
+             console.log(">>> fetchMyTickets: Tickets successfully fetched:", myTickets.value.length);
+
+        } catch (err) {
+             console.error(">>> Error during fetchMyTickets API call:", err.response?.data || err.message);
+             myTicketsError.value = err.response?.data?.error || 'Errore durante il recupero dei biglietti.';
+             if (token.value && (err.response?.status === 401 || err.response?.status === 403)) {
+                 console.warn(">>> fetchMyTickets: Authentication error detected, logging out.");
+                 await logout(); // Assumi che logout esista
+             }
+        } finally {
+             console.log(">>> fetchMyTickets: Executing finally block.");
+             myTicketsLoading.value = false;
+        }
+    }
 
     async function fetchEvents() {
         console.log(">>> fetchEvents ACTION CALLED");

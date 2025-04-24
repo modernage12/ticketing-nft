@@ -7,32 +7,50 @@ const { pool } = require('../config/db');
  * @returns {Promise<Array>} Un array di oggetti rappresentanti i biglietti posseduti dal DB.
  */
 const findTicketsByOwner = async (ownerWalletAddress) => {
-    console.log(`>>> findTicketsByOwner (from DB Cache): Recupero tickets per ${ownerWalletAddress}`);
-    // Query per selezionare i biglietti posseduti dall'utente dalla nostra tabella Tickets
+    // Log iniziale (invariato)
+    console.log(`>>> findTicketsByOwner Service: Tentativo recupero tickets per indirizzo: ${ownerWalletAddress}`);
+
+    // Query SQL MODIFICATA per confronto case-insensitive
     const query = `
         SELECT
-            token_id, event_id, original_price, issuance_date, is_listed
+            token_id,
+            event_id,
+            original_price,
+            issuance_date,
+            is_listed,
+            owner_wallet_address -- Seleziona anche l'indirizzo per debug/verifica
         FROM Tickets
-        WHERE owner_wallet_address = $1
+        WHERE LOWER(owner_wallet_address) = LOWER($1) -- Confronto case-insensitive!
         ORDER BY token_id ASC;
     `;
+    // Parametro per la query (invariato)
+    const values = [ownerWalletAddress];
+
+    console.log(`>>> findTicketsByOwner Service: Eseguo query: ${query.replace('$1', `'${ownerWalletAddress}'`)}`); // Logga la query con il valore
+
     try {
-        const result = await pool.query(query, [ownerWalletAddress]);
-        console.log(`>>> findTicketsByOwner (from DB Cache): Trovati ${result.rows.length} tickets nel DB per ${ownerWalletAddress}`);
-        // Formattiamo i dati per coerenza con l'output precedente
+        const result = await pool.query(query, values);
+        console.log(`>>> findTicketsByOwner Service: Query eseguita. Numero righe trovate nel DB: ${result.rows.length} per indirizzo (case-insensitive): ${ownerWalletAddress}`);
+
+        // Logga i risultati grezzi se utili per debug
+        // if (result.rows.length > 0) {
+        //     console.log(">>> findTicketsByOwner Service: Dati grezzi dal DB:", result.rows);
+        // }
+
+        // Mappatura risultati (invariata, ma aggiungi robustezza)
         return result.rows.map(ticket => ({
-            tokenId: ticket.token_id.toString(),
-            eventId: ticket.event_id ? ticket.event_id.toString() : 'N/D',
-            originalPrice: ticket.original_price ? ticket.original_price.toString() : 'N/D',
-            issuanceDate: ticket.issuance_date ? ticket.issuance_date.toISOString() : 'N/A',
-            isListed: ticket.is_listed
+            // Assicurati che le proprietà esistano prima di chiamare metodi
+            tokenId: ticket.token_id?.toString() ?? 'N/D', // Usa toString solo se non è null/undefined
+            eventId: ticket.event_id?.toString() ?? 'N/D',
+            originalPrice: ticket.original_price?.toString() ?? '0', // Default a '0' o 'N/D' se nullo
+            issuanceDate: ticket.issuance_date ? new Date(ticket.issuance_date).toISOString() : null, // Restituisci null se la data è nulla
+            isListed: ticket.is_listed ?? false // Default a false se nullo
         }));
     } catch (error) {
-        console.error(`ERRORE nel recuperare i tickets dal DB per ${ownerWalletAddress}:`, error);
-        // In caso di errore DB, restituisce array vuoto per non bloccare frontend
-        // Potremmo anche lanciare un errore 500 qui.
-        return [];
-        // throw new Error('Errore durante la ricerca dei biglietti (cache DB).');
+        console.error(`>>> ERRORE in findTicketsByOwner Service durante query DB per ${ownerWalletAddress}:`, error);
+        // Restituisci array vuoto o lancia errore
+        // return []; // Comportamento attuale
+        throw new Error(`Errore database durante ricerca biglietti per ${ownerWalletAddress}`); // Lancia errore per farlo gestire dal controller
     }
 };
 
