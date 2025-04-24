@@ -374,10 +374,120 @@ const purchaseSecondaryTicket = async (buyerUserId, listingId) => {
     }
 };
 
+/**
+ * Processa la notifica di un listing avvenuto tramite wallet esterno
+ * e inserisce/aggiorna il record nel database 'listings'.
+ */
+const processExternalListingNotification = async (notificationData) => {
+    console.log(">>> marketplaceService: Processo notifica listing esterno per dati:", notificationData);
+    const {
+        tokenId,
+        nftContractAddress,
+        listingPrice, // Prezzo in Wei come stringa
+        sellerAddress, // Wallet esterno che ha listato
+        transactionHash // Opzionale, per riferimento
+    } = notificationData;
+
+    // Validazione input essenziale
+    if (!tokenId || !nftContractAddress || !listingPrice || !sellerAddress) {
+        throw new Error('Dati notifica listing esterno mancanti o invalidi (tokenId, nftContractAddress, listingPrice, sellerAddress).');
+    }
+
+    const client = await pool.connect(); // Ottieni connessione dal pool
+    console.log(">>> marketplaceService: Connessione DB ottenuta per notifica.");
+
+    try {
+        // --- Recupera event_id e original_price dalla tabella tickets ---
+        console.log(`>>> marketplaceService: Recupero info ticket ${tokenId} dal DB 'tickets'...`);
+        const ticketQuery = `
+            SELECT event_id, original_price
+            FROM tickets
+            WHERE token_id = $1 AND nft_contract_address = $2;
+        `;
+        const ticketResult = await client.query(ticketQuery, [tokenId, nftContractAddress]); // Usa client.query
+
+        if (ticketResult.rows.length === 0) {
+            console.warn(`>>> marketplaceService: Impossibile trovare info ticket per ${tokenId} nella tabella tickets.`);
+            throw new Error(`Informazioni ticket (evento/prezzo orig.) non trovate per tokenId ${tokenId}`);
+        }
+        const ticketInfo = ticketResult.rows[0];
+        const eventId = ticketInfo.event_id;
+        const originalPrice = ticketInfo.original_price; // Questo sarà stringa (character varying)
+        console.log(`>>> marketplaceService: Info ticket recuperate: eventId=<span class="math-inline">\{eventId\}, originalPrice\=</span>{originalPrice}`);
+        // --- Fine Recupero Info Ticket ---
+
+        // Per i listing esterni, seller_user_id è NULL
+        const sellerUserId = null;
+
+        // --- Inserisci/Aggiorna (UPSERT) nel database 'listings' ---
+        console.log(`>>> marketplaceService: Eseguo UPSERT listing nel DB...`);
+        const upsertQuery = `
+            INSERT INTO listings (
+                token_id,               -- bigint
+                nft_contract_address,   -- character varying
+                seller_address,         -- character varying (nome corretto!)
+                price,                  -- character varying (contiene Wei)
+                listed_at,              -- timestamp with time zone
+                is_active,              -- boolean
+                event_id,               -- bigint
+                original_price,         -- character varying (contiene Wei)
+                seller_user_id          -- integer (NULL per esterni)
+            ) VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8)
+            ON CONFLICT (nft_contract_address, token_id) -- Usa la chiave univoca corretta
+            DO UPDATE SET
+                seller_address = EXCLUDED.seller_address,
+                price = EXCLUDED.price,
+                listed_at = EXCLUDED.listed_at,
+                is_active = EXCLUDED.is_active,
+                sold_at = NULL,
+                cancelled_at = NULL,
+                seller_user_id = EXCLUDED.seller_user_id
+            RETURNING listing_id;
+        `;
+        const values = [
+            tokenId,                // Deve essere numero/bigint
+            nftContractAddress,
+            sellerAddress,
+            listingPrice,           // Stringa Wei
+            true,                   // is_active = true
+            eventId,                // Numero/BigInt
+            originalPrice,          // Stringa Wei
+            sellerUserId            // NULL
+        ];
+
+        const result = await client.query(upsertQuery, values); // Usa client.query
+        console.log(`>>> marketplaceService: Listing inserito/aggiornato con ID: ${result.rows[0].listing_id}`);
+        // --- Fine UPSERT ---
+
+        // --- Aggiorna stato is_listed nella tabella tickets ---
+        console.log(`>>> marketplaceService: Aggiorno stato is_listed=true per ticket ${tokenId}...`);
+        const updateTicketQuery = `
+            UPDATE tickets
+            SET is_listed = true
+            WHERE token_id = $1 AND nft_contract_address = $2;
+        `;
+        await client.query(updateTicketQuery, [tokenId, nftContractAddress]); // Usa client.query
+        console.log(`>>> marketplaceService: Stato ticket ${tokenId} aggiornato a is_listed=true.`);
+        // --- Fine Aggiornamento Ticket ---
+
+        return result.rows[0];
+
+    } catch (error) {
+        console.error(">>> marketplaceService: Errore DB durante UPSERT listing esterno:", error);
+        throw new Error(`Errore database durante salvataggio listing: ${error.message}`);
+    } finally {
+        if (client) {
+            client.release(); // Rilascia sempre la connessione
+            console.log(">>> marketplaceService: Connessione DB rilasciata.");
+        }
+    }
+};
+
 module.exports = {
     getActiveListings,      // Legge SOLO dal DB Cache
     listItemForSale,        // Scrive on-chain E aggiorna cache DB (Listings, Tickets)
     buyListedItem,          // Scrive on-chain E aggiorna cache DB (Listings, Tickets)
     cancelListingForUser,    // Scrive on-chain E aggiorna cache DB (Listings, Tickets)
-    purchaseSecondaryTicket
+    purchaseSecondaryTicket,
+    processExternalListingNotification
 };

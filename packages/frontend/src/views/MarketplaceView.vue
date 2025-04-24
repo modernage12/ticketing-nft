@@ -2,6 +2,9 @@
 import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { ethers } from 'ethers'; // Per formattare il prezzo
+import { useWalletStore } from '@/stores/wallet';
+import MarketplaceJson from '@/contracts/abi/Marketplace.json';
+import { MARKETPLACE_ADDRESS } from '@/contracts/config.js'; 
 
 const authStore = useAuthStore();
 
@@ -9,32 +12,155 @@ const authStore = useAuthStore();
 const buyLoadingId = ref(null);
 const buyError = ref(null);
 const buySuccessMessage = ref('');
+const walletStore = useWalletStore();        // <== CREA ISTANZA Wallet Store
+const MARKETPLACE_ABI = MarketplaceJson.abi; // <== DEFINISCI ABI Marketplace
 
-// Funzione chiamata al click del pulsante "Compra"
+// Funzione COMPLETA e AGGIORNATA per gestire l'acquisto (sostituisce quella vecchia)
 const handleBuy = async (listing) => {
-    // === MODIFICA: Confronto case-insensitive per sicurezza ===
-    if (buyLoadingId.value !== null || listing.sellerAddress?.toLowerCase() === currentUserWalletAddress.value?.toLowerCase()) {
-        console.warn("Acquisto già in corso o tentativo di comprare proprio item.");
-        buyError.value = "Non puoi comprare la tua stessa offerta."; // Messaggio più chiaro
+    // --- [INIZIO BLOCCO DEFINIZIONE VARIABILI E VALIDAZIONE] ---
+    // Queste righe estraggono i dati dal listing e fanno controlli preliminari
+    const { tokenId, price, sellerAddress, listing_id } = listing;
+
+    if (tokenId === undefined || price === undefined || price === null) {
+        console.error("handleBuy: Dati listing mancanti (tokenId, price)", listing);
+        buyError.value = "Dati annuncio non validi per l'acquisto.";
         return;
     }
-    // =======================================================
+    const currentExtAddress = walletStore.connectedAddress;
+    const currentIntAddress = authStore.user?.walletAddress;
+    const isMyOwnListing = sellerAddress?.toLowerCase() === currentExtAddress?.toLowerCase() ||
+                           sellerAddress?.toLowerCase() === currentIntAddress?.toLowerCase();
 
-    buyLoadingId.value = listing.tokenId;
-    buyError.value = null;
-    buySuccessMessage.value = '';
-
-    try {
-        console.log(`>>> MarketplaceView: Chiamo authStore.buyFromMarketplace per listingId ${listing.listing_id}`); // Usa listing_id
-        const result = await authStore.buyFromMarketplace(listing.listing_id); // Chiama la nuova azione con listing_id
-        buySuccessMessage.value = `Acquisto del Ticket ID ${listing.tokenId} completato! Hash: ${result.buyTxHash}`;
-    } catch (error) {
-        buyError.value = authStore.error || 'Errore imprevisto durante l\'acquisto.';
-        console.error("Errore catturato in MarketplaceView (buy):", error);
-    } finally {
-        buyLoadingId.value = null;
+    if (isMyOwnListing) {
+         console.warn("Tentativo di comprare proprio item.");
+         buyError.value = "Non puoi comprare la tua stessa offerta.";
+         return;
     }
-};
+    if (buyLoadingId.value !== null) return;
+
+    console.log(`>>> MarketplaceView: handleBuy INIZIO per tokenId=<span class="math-inline">\{tokenId\}, price\=</span>{price} Wei`);
+    buyLoadingId.value = tokenId;
+    buyError.value = null; buySuccessMessage.value = '';
+
+    let listingPriceBigInt;
+    try {
+        listingPriceBigInt = BigInt(price);
+    } catch (e) {
+        buyError.value = "Prezzo annuncio non valido.";
+        buyLoadingId.value = null;
+        return;
+    }
+    // --- [FINE BLOCCO DEFINIZIONE VARIABILI E VALIDAZIONE] ---
+
+    // --- [INIZIO BLOCCO CONTROLLO WALLET INTERNO/ESTERNO] ---
+    // Questa è la parte nuova che decide quale logica usare
+    if (walletStore.isUsingExternalWallet) {
+        // --- [INIZIO BLOCCO LOGICA WALLET ESTERNO (Nuova)] ---
+        // Tutto il codice da qui fino al 'catch' e 'finally' è per Brave/MetaMask
+        try {
+            console.log(`>>> MarketplaceView: Tentativo Buy (Legacy Gas + Fee Calc) con Wallet Esterno per tokenId=<span class="math-inline">\{tokenId\}, price\=</span>{listingPriceBigInt}`);
+            const signer = await walletStore.ensureSigner();
+            if (!signer) throw new Error("Wallet esterno non connesso o signer non valido.");
+            const signerAddress = await signer.getAddress();
+            console.log(">>> MarketplaceView: Signer ottenuto per Buy:", signerAddress);
+
+             if (signerAddress.toLowerCase() === sellerAddress?.toLowerCase()) {
+                 throw new Error("Non puoi comprare la tua stessa offerta.");
+             }
+
+            let currentProvider = signer.provider;
+            if (!currentProvider && window.ethereum) {
+                currentProvider = new ethers.BrowserProvider(window.ethereum);
+            }
+             if (!currentProvider) throw new Error("Impossibile ottenere provider per fee data e fee rate.");
+
+            // --- LEGGI COMMISSIONE E CALCOLA VALORE TOTALE ---
+            console.log(">>> MarketplaceView: Leggo parametri commissione dal contratto Marketplace...");
+            const marketContractReader = new ethers.Contract(MARKETPLACE_ADDRESS, MARKETPLACE_ABI, currentProvider);
+            const feeBasisPoints = await marketContractReader.serviceFeeBasisPoints();
+            console.log(`>>> MarketplaceView: Fee Basis Points letti: ${feeBasisPoints}`);
+            const commissionAmount = (listingPriceBigInt * feeBasisPoints) / 10000n;
+            const totalValueToSend = listingPriceBigInt + commissionAmount; // <== CALCOLA VALORE TOTALE
+            console.log(`>>> MarketplaceView: Prezzo: ${listingPriceBigInt}, Commissione: ${commissionAmount}, Totale da inviare: ${totalValueToSend}`);
+            // -------------------------------------------------
+
+            // Ottieni gasPrice legacy
+            console.log(">>> MarketplaceView: Ottengo dati fee gas attuali...");
+            const feeData = await currentProvider.getFeeData();
+            const legacyGasPrice = feeData.gasPrice ? (feeData.gasPrice * 120n / 100n) : ethers.parseUnits('20', 'gwei');
+            console.log(`>>> MarketplaceView: Uso gasPrice legacy per Buy: ${legacyGasPrice.toString()} Wei`);
+
+            // Prepara i dati della transazione 'buyItem'
+            const marketInterface = new ethers.Interface(MARKETPLACE_ABI);
+            console.log(`>>> MarketplaceView: Preparo dati per buyItem Tx (TokenId: ${tokenId})...`);
+            const buyData = marketInterface.encodeFunctionData("buyItem", [tokenId]);
+
+            const buyTxObject = {
+                to: MARKETPLACE_ADDRESS,
+                data: buyData,
+                value: totalValueToSend, // <== USA IL VALORE TOTALE!
+                gasLimit: 300000,
+                gasPrice: legacyGasPrice
+            };
+
+            // Invia la transazione
+            console.log(`>>> MarketplaceView: Invio buyItem Tx via signer.sendTransaction...`, buyTxObject);
+            const buyTxResponse = await signer.sendTransaction(buyTxObject);
+            buySuccessMessage.value = `Acquisto inviato (Tx: ${buyTxResponse.hash}). Attendi conferma...`;
+            console.log(">>> MarketplaceView: buyItem Tx inviata, attendo ricevuta...", buyTxResponse.hash);
+            const buyReceipt = await buyTxResponse.wait(1);
+
+            if (buyReceipt.status !== 1) {
+                // Prova a vedere se c'è un messaggio di revert specifico ora
+                let revertReason = "Acquisto fallito on-chain.";
+                try {
+                     // Questa chiamata potrebbe fallire se il provider non la supporta o la tx non è fallita con un reason
+                     const txInfo = await currentProvider.getTransaction(buyReceipt.hash);
+                     if (txInfo) {
+                         await currentProvider.call(txInfo, buyReceipt.blockNumber); // Questo dovrebbe rigettare con il motivo
+                     }
+                } catch (error) {
+                     // Prova ad estrarre il motivo dall'errore del .call()
+                     revertReason = error?.revert?.args?.[0] || error?.reason || revertReason;
+                     console.error("Errore durante il tentativo di ottenere il motivo del revert:", error);
+                }
+                throw new Error(`${revertReason} Status: ${buyReceipt.status}, Tx: ${buyTxResponse.hash}`);
+            }
+            console.log(">>> MarketplaceView: buyItem Tx confermata:", buyReceipt.hash);
+
+            // Successo! Aggiorna UI / Mostra successo
+            buySuccessMessage.value = `Biglietto ${tokenId} acquistato con successo (Ext)! Hash: ${buyReceipt.hash}`;
+            await authStore.fetchListings();
+            await authStore.fetchMyTickets();
+
+        } catch (error) {
+            console.error(">>> MarketplaceView: Errore acquisto con wallet esterno:", error);
+            const reason = error?.message || "Errore sconosciuto."; // Usa il messaggio elaborato sopra se disponibile
+            buyError.value = `Errore Acquisto (Esterno): ${reason}`;
+        } finally {
+            buyLoadingId.value = null;
+        }
+        // --- [FINE BLOCCO LOGICA WALLET ESTERNO] ---
+
+    } else {
+        // --- [INIZIO BLOCCO LOGICA WALLET INTERNO (Vecchia)] ---
+        // Questo blocco 'else' contiene la logica che c'era prima,
+        // che chiama il backend per fare l'acquisto con il wallet interno.
+        try {
+            console.log(`>>> MarketplaceView: Chiamo authStore.buyFromMarketplace(listingId=${listing_id}) (interno)...`);
+            const result = await authStore.buyFromMarketplace(listing_id);
+            console.log(`>>> MarketplaceView: Risultato ricevuto da buyFromMarketplace (interno):`, result);
+            buySuccessMessage.value = `Biglietto ${tokenId} acquistato! Hash: ${result.buyTxHash}`;
+        } catch (error) {
+            console.error(">>> MarketplaceView: ERRORE nel catch di handleBuy (interno):", error);
+            buyError.value = error?.message || authStore.error || 'Errore imprevisto acquisto.';
+        } finally {
+             buyLoadingId.value = null;
+        }
+        // --- [FINE BLOCCO LOGICA WALLET INTERNO] ---
+    }
+    // --- [FINE BLOCCO CONTROLLO WALLET INTERNO/ESTERNO] ---
+}; // <== Parentesi graffa finale della funzione handleBuy
 
 // Funzioni per formattare
 const formatPrice = (priceString) => { try { return ethers.formatUnits(priceString || '0', 6); } catch { return "N/A"; } };

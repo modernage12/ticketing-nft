@@ -4,6 +4,7 @@ require('dotenv').config();
 // 2. Importa i plugin necessari (se non già presenti/caricati da Hardhat)
 require("@nomicfoundation/hardhat-ethers");
 require("@nomicfoundation/hardhat-chai-matchers"); // Lo lasciamo per quando rieseguiremo i test
+require("@nomicfoundation/hardhat-verify");
 
 // Recupera la chiave privata dal file .env
 const privateKey = process.env.PRIVATE_KEY;
@@ -37,6 +38,22 @@ module.exports = {
       chainId: 80002, // Hardhat di solito lo ricava dall'URL RPC
 	  gasPrice: 30000000000,
     }
+  },
+
+  etherscan: { // <--- AGGIUNGI/MODIFICA QUESTA SEZIONE
+    apiKey: {
+       polygonAmoy: process.env.POLYGONSCAN_API_KEY || 'YOUR_POLYGONSCAN_API_KEY' // Usa una chiave API da Polygonscan
+     },
+     customChains: [ // Necessario per reti testnet come Amoy
+        {
+          network: "polygonAmoy",
+          chainId: 80002, // Verifica il Chain ID corretto per Amoy se diverso
+          urls: {
+            apiURL: "https://api-amoy.polygonscan.com/api",
+            browserURL: "https://amoy.polygonscan.com/"
+          }
+        }
+      ]
   },
 
   // Potremmo aggiungere altre configurazioni qui (es. etherscan, gas reporter) in futuro

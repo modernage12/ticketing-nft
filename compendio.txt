@@ -480,3 +480,155 @@ Piano di Implementazione (Fasi):
         * Quando si gestisce `POST /api/events`, leggere `wallet_preference` e `external_wallet_address` (verificare esistenza colonna DB) dell'utente creatore (`req.user`).
         * Determinare l'`creatorAddress` corretto da passare alla funzione `registerEvent` del contratto `TicketNFT`: se pref='external' usare `external_wallet_address`, altrimenti usare `wallet_address` interno.
 
+In corso: implementazione logica wallet esterno in MyTicketsView.vue. Riscontrato errore importazione configurazione contratti (config.js). Verifica percorso/esistenza file in corso.
+Iniziata modifica handleListTicket in MyTicketsView.vue per logica wallet esterno. Risolto errore import config.js. Attualmente bloccato da errore JavaScript runtime che causa pagine bianche. In attesa di analisi errori console browser.
+Implementazione logica wallet esterno in MyTicketsView.vue. Bloccato da errore runtime ReferenceError: useWalletStore is not defined. In corso: Correzione importazione store wallet nel componente.
+Implementazione logica wallet esterno in handleListTicket (MyTicketsView.vue) completata. Risolti errori runtime (ReferenceError dovuto a incoerenza nomi variabili import ABI JSON). Componente MyTicketsView.vue ora caricato correttamente e pronto per testare il flusso di messa in vendita con wallet esterno.
+La funzione handleListTicket ora verifica walletStore.isUsingExternalWallet. Se true, tenta di ottenere il signer da walletStore, istanziare i contratti TicketNFT e Marketplace usando ABI locali e indirizzi da config.js, e chiamare nftContract.approve() seguito da marketContract.listItem() chiedendo conferma a MetaMask per entrambe le transazioni.
+Implementazione logica wallet esterno in handleListTicket (MyTicketsView.vue). Bloccato da errore runtime TypeError: Cannot read from private field originato da ethers.js durante provider.getSigner() in ensureSigner. In corso: Test con versione semplificata di ensureSigner che forza ricreazione provider/signer.
+Implementazione logica wallet esterno in handleListTicket (MyTicketsView.vue). Bloccato da errore runtime TypeError: Cannot access private method durante chiamata approve. In corso: Debug tramite logging aggiuntivo e chiamata read-only per verificare stato signer/contratto prima della transazione.
+Implementazione logica wallet esterno in handleListTicket. Bloccato da errore runtime TypeError: Cannot access private method originato da ethers.js. Ripristinato window.prompt. In corso: Test con versione raffinata di ensureSigner (DEBUG v3) che salva il provider prima di getSigner.
+XX. Integrazione Wallet Esterno (Fase B - In Corso)
+
+Obiettivo Generale: [...] (invariato) [cite: 233]
+
+Piano di Implementazione (Fasi):
+    * Fase B.1: Frontend Marketplace P2P (List/Cancel da MyTicketsView, Buy da MarketplaceView) (IN CORSO)
+        * Obiettivo: Modificare componenti Vue per usare `signer` da MetaMask per transazioni P2P quando `isUsingExternalWallet` è `true`. [cite: 234]
+        * Stato Attuale: Implementazione logica condizionale in `handleListTicket` (`MyTicketsView.vue`) per la messa in vendita[cite: 254, 404]. Copiati ABI e indirizzi contratti nel frontend (`src/contracts/`)[cite: 390].
+        * **ERRORE BLOCCANTE:** Si verifica un errore persistente `TypeError: Cannot access private method` all'interno di `ethers.js` quando si tenta di chiamare funzioni del contratto (es. `approve`, `listItem`, anche read-only [cite: 410, 412]) utilizzando il `signer` ottenuto da `walletStore.ensureSigner()`[cite: 255, 257, 259, 407].
+        * Debug Tentati: Diverse versioni di `ensureSigner` per forzare ricreazione provider/signer[cite: 256, 408], logging aggiuntivo per ispezionare oggetti `signer`/`contract`[cite: 258, 411], ripristino `window.prompt`[cite: 259, 413], raffinamento `ensureSigner`[cite: 260, 414]. Nessuno di questi ha risolto l'errore.
+        * **Passi Successivi Immediati:**
+            1. Semplificare la funzione `ensureSigner` in `stores/wallet.js`.
+            2. Modificare `handleListTicket` per istanziare `ethers.Contract` *localmente* all'interno della funzione, subito prima di chiamare le funzioni del contratto, usando il `signer` appena ottenuto.
+            3. Verificare nuovamente e scrupolosamente la correttezza degli ABI JSON e degli indirizzi in `src/contracts/config.js`.
+            4. Testare nuovamente il flusso "Vendi" da `MyTicketsView.vue` con wallet esterno.
+        * **Da Fare (dopo risoluzione errore):** Implementare logica simile per `handleCancelListing` in `MyTicketsView.vue` e per `handleBuyListing` in `MarketplaceView.vue`.
+
+    * Fase B.2: Frontend Acquisto Primario (SUCCESSIVA) [...] [cite: 242, 387]
+    * Fase B.3: Backend Creazione Evento (Payout Address) (SUCCESSIVA) [...] [cite: 245, 388]
+
+XX. Integrazione Wallet Esterno (Fase B - In Corso)
+
+Obiettivo Generale: [...]
+
+Piano di Implementazione (Fasi):
+    * Fase B.1: Frontend Marketplace P2P (List/Cancel da MyTicketsView, Buy da MarketplaceView) (IN CORSO)
+        * Obiettivo: [...]
+        * Stato Attuale: **SUCCESSO** nell'implementazione e test della messa in vendita (`approve` + `listItem`) da `MyTicketsView.vue` utilizzando un wallet esterno (Brave Wallet).
+        * **Workaround Chiave:** È stato necessario utilizzare il parametro **legacy `gasPrice`** (ottenuto dinamicamente da `provider.getFeeData()`) negli oggetti transazione passati a `signer.sendTransaction`, poiché Brave Wallet (con `ethers@6.13.5` su Amoy) non gestiva correttamente/ignorava i parametri EIP-1559 (`maxFeePerGas`, `maxPriorityFeePerGas`) forniti, causando errori "transaction underpriced".
+        * **Da Fare (Fase B.1):**
+            - Applicare lo stesso workaround (uso di `gasPrice` legacy) alle funzioni `handleCancelListing` in `MyTicketsView.vue` e `handleBuyListing` (o nome simile) in `MarketplaceView.vue` per le interazioni con wallet esterno.
+            - Testare le funzioni di annullamento e acquisto P2P con wallet esterno.
+        * **Problema Aperto (UI/Dati):** La lista "I Miei Biglietti" (`authStore.fetchMyTickets`) attualmente non mostra gli NFT posseduti dal wallet esterno (perché filtra per `owner_user_id` interno). Da affrontare successivamente.
+
+    * Fase B.2: Frontend Acquisto Primario (SUCCESSIVA) [...]
+    * Fase B.3: Backend Creazione Evento (Payout Address) (SUCCESSIVA) [...]
+	XX. Integrazione Wallet Esterno (Fase B - In Corso)
+
+Obiettivo Generale: [...]
+
+Piano di Implementazione (Fasi):
+    * Fase B.1: Frontend Marketplace P2P (List/Cancel da MyTicketsView, Buy da MarketplaceView) (IN CORSO)
+        * Obiettivo: [...]
+        * Stato Attuale:
+            - **Trasferimento NFT per Test:** Trasferito manualmente NFT (ID 9) da wallet interno a wallet esterno (`0x356...`) tramite script backend dedicato per abilitare test di proprietà corretta. DB aggiornato manualmente. [cite: 1]
+            - **Debug Invio Transazioni (Brave Wallet):** Riscontrati errori persistenti (`TypeError: Cannot access private method`, `execution reverted`, `transaction underpriced: gas tip cap 0`) durante l'invio di transazioni (`approve`, `listItem`) da Brave Wallet via `ethers@6.13.5`. [cite: 1]
+            - **Workaround Trovato:** L'invio di transazioni funziona specificando il parametro **legacy `gasPrice`** (ottenuto da `provider.getFeeData()`) nell'oggetto transazione passato a `signer.sendTransaction`. L'uso dei parametri EIP-1559 (`maxFeePerGas`, `maxPriorityFeePerGas`) sembrava essere ignorato o mal gestito da Brave Wallet su Amoy in questo contesto. [cite: 1]
+            - **Listing Esterno:** Implementata e testata con **successo** la messa in vendita (`handleListTicket` in `MyTicketsView.vue`) per un NFT posseduto dal wallet esterno, usando il workaround `gasPrice`. [cite: 1]
+            - **Annullamento Esterno:** Implementata logica (`handleCancelListing` in `MyTicketsView.vue`) con workaround `gasPrice`. (DA TESTARE).
+            - **Acquisto Esterno:** Implementata logica (`handleBuy` in `MarketplaceView.vue`) con workaround `gasPrice`. Risolto `ReferenceError: walletStore is not defined`. (DA TESTARE).
+        * **Da Fare (Fase B.1):**
+            - Testare end-to-end le funzioni di annullamento e acquisto P2P con wallet esterno.
+        * **Problemi Aperti:**
+            - **Visibilità Listing:** Il listing creato on-chain (Token 9) non appare nella vista Marketplace. Probabilmente manca la notifica/salvataggio nel DB backend dopo il successo della transazione `listItem` esterna. Da investigare (Controllare DB `listings` -> Modificare `handleListTicket` per notificare backend). [cite: 1]
+            - **Visibilità "I Miei Biglietti":** La vista `MyTicketsView.vue` (via `authStore.fetchMyTickets`) attualmente non mostra gli NFT posseduti dall'indirizzo esterno connesso. Richiede modifica della logica di fetch/visualizzazione per wallet esterno. [cite: 1]
+
+    * Fase B.2: Frontend Acquisto Primario (SUCCESSIVA) [...]
+    * Fase B.3: Backend Creazione Evento (Payout Address) (SUCCESSIVA) [...]
+	XX. Integrazione Wallet Esterno (Fase B - In Corso)
+[...]
+    * Fase B.1: Frontend Marketplace P2P (List/Cancel da MyTicketsView, Buy da MarketplaceView) (IN CORSO)
+        * Stato Attuale:
+            - [...] (Info su Listing Esterno e Workaround gasPrice)
+            - **Acquisto Esterno:** Implementata e testata con **successo** la funzione di acquisto (`handleBuy` in `MarketplaceView.vue`) per un NFT listato, usando il wallet esterno (Brave Wallet). È stato necessario:
+                - Usare il workaround `gasPrice` legacy per compatibilità con Brave Wallet.
+                - Calcolare la commissione di servizio (leggendo `serviceFeeBasisPoints` dal contratto Marketplace).
+                - Inviare il `totalValueToSend = listingPrice + commissionAmount` nel campo `value` della transazione `buyItem`.
+        * **Da Fare (Fase B.1):**
+            - Implementare il workaround `gasPrice` legacy nella funzione `handleCancelListing` in `MyTicketsView.vue`.
+            - Testare end-to-end la funzione di annullamento listing con wallet esterno.
+        * **Problemi Aperti:**
+            - **Visibilità Listing:** Il listing creato esternamente (Token 9) non appare. Investigare: 1) Controllare DB `listings`. 2) Se manca, modificare `handleListTicket` per notificare/salvare il listing nel backend dopo successo on-chain.
+            - **Visibilità "I Miei Biglietti":** `MyTicketsView.vue` non mostra NFT posseduti dall'indirizzo esterno. Richiede modifiche fetch/visualizzazione.
+[...]
+/api/marketplace:
+    [...]
+    POST /notify-external-listing: (Nuovo) Riceve notifica dal frontend dopo successo on-chain di un listing eseguito con wallet esterno. Richiede auth (`protect`). Body: { tokenId, nftContractAddress, listingPrice, sellerAddress, transactionHash? }. Aggiorna DB `listings` e `tickets`.
+	XX. Integrazione Wallet Esterno (Fase B - In Corso)
+[...]
+    * Fase B.1: Frontend Marketplace P2P (List/Cancel/Buy) (IN CORSO)
+        * Stato Attuale:
+            - [...] (Info su Transfer NFT, Workaround gasPrice, Successo List/Buy on-chain)
+            - **Gestione Cache DB Backend:** Implementata logica backend per sincronizzare il DB dopo operazioni esterne:
+                - Creato endpoint API `POST /api/marketplace/notify-external-listing` (protetto).
+                - Implementata logica in `marketplaceService` (`processExternalListingNotification`) per ricevere dati dal frontend, recuperare info mancanti e fare UPSERT su `listings` + UPDATE su `tickets`.
+        * **Da Fare (IMMEDIATO):**
+            - **Frontend:** Modificare `handleListTicket` in `MyTicketsView.vue` per chiamare la nuova API `/notify-external-listing` *dopo* la conferma on-chain della transazione `listItem` esterna.
+        * **Da Fare (Successivo Fase B.1):**
+            - Implementare e testare il workaround `gasPrice` legacy in `handleCancelListing`. Aggiungere chiamata a API backend di notifica simile (`/notify-external-cancel`?) dopo successo on-chain.
+            - Implementare e testare workaround e notifica backend (`/notify-external-purchase`?) in `handleBuy`.
+        * **Problemi Aperti:**
+            - **Visibilità "I Miei Biglietti":** `MyTicketsView.vue` non mostra NFT posseduti dall'indirizzo esterno. Richiede modifiche fetch/visualizzazione. (Priorità post-notifiche backend).
+[...]
+XX. Integrazione Wallet Esterno (Fase B - In Corso)
+[...]
+    * Fase B.1: Frontend Marketplace P2P (List/Cancel/Buy) (IN CORSO - BLOCCATO)
+        * Stato Attuale:
+            - [...] (Info su Transfer NFT, Workaround gasPrice, Successo Acquisto)
+            - **Listing Esterno:**
+                - Risolto `TypeError` frontend relativo alla chiamata API di notifica backend (usando `axios.post` diretto).
+                - Testato listing NFT (posseduto da wallet esterno) da `MyTicketsView.vue` usando workaround `gasPrice`.
+                - Transazione `approve` **OK**.
+                - Transazione `listItem` **FALLISCE ON-CHAIN (REVERTED)**.
+        * **Da Fare (IMMEDIATO):**
+            - **Diagnosticare Revert `listItem`:** Analizzare codice Solidity di `Marketplace.sol::listItem` o verificare stato on-chain (listing esistente? approvazione ancora valida?) per capire la causa del revert. <-- SIAMO QUI
+        * **Da Fare (Successivo Fase B.1 - dopo fix listItem):**
+            - Implementare chiamata frontend a API backend `/notify-external-listing` dopo successo `listItem`.
+            - Implementare e testare `handleCancelListing` (con workaround `gasPrice` e notifica backend).
+        * **Problemi Aperti:**
+            - Visibilità Listing/Biglietti esterni nella UI. (Priorità post-interazioni funzionanti).
+[...]
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Debug)
+
+Blocco: La transazione listItem chiamata dal frontend (MyTicketsView.vue) usando un wallet esterno fallisce on-chain (reverted) dopo che la transazione approve ha avuto successo.   
+Diagnosi in Corso: Tentativo di diagnosticare la causa del revert analizzando lo stato on-chain (getApproved su TicketNFT, listings su Marketplace) per il token ID specifico.
+Verifica Contratti: Entrambi i contratti (TicketNFT all'indirizzo 0x64af... e Marketplace all'indirizzo 0xDE1A...) sono stati verificati con successo su Amoy Polygonscan tramite il plugin npx hardhat verify dopo aver risolto problemi relativi alla posizione del file .env e alla necessità di fornire gli argomenti del costruttore.
+Problema Interfaccia Polygonscan: L'interfaccia web di Polygonscan non riflette lo stato verificato dei contratti (al [24/04/2025 13:16 CEST]), impedendo l'uso diretto della funzione "Read Contract" del sito.
+Prossimo Passo Immediato: Eseguire i controlli on-chain necessari (getApproved, listings) utilizzando la console Hardhat (npx hardhat console --network amoy) per bypassare i problemi dell'interfaccia Polygonscan.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Debug)
+
+Blocco: La transazione listItem chiamata dal frontend (MyTicketsView.vue, tramite pulsante di test dedicato) usando un wallet esterno per un NFT trasferito (es. Token ID 3) fallisce on-chain (reverted), nonostante approve venga confermata nel frontend (wait(1) presente e corretto nel codice).
+Diagnosi in Corso:
+Analisi precedente con console Hardhat per Token ID 3 ha mostrato getApproved = indirizzo zero, suggerendo un problema di visibilità/persistenza dell'approvazione o timing RPC.
+Test con Token ID 5 (usando erroneamente pulsante test) ha confermato che approve passa (wait(1)) ma listItem fallisce subito dopo, rafforzando l'ipotesi di problemi di stato on-chain (Price Cap?) o timing/propagazione RPC.
+Confermato che la lista UI (authStore.myTickets) non mostra NFT esterni, richiedendo l'uso di un pulsante di test per handleListTicket con token esterni. Questo è un problema UI/fetch dati da risolvere separatamente.
+Prossimo Passo Immediato:
+Verificare on-chain (via Hardhat console) il originalPrice del Token ID 3 (per escludere violazione Price Cap del pulsante test).
+Verificare on-chain (via Hardhat console) lo stato getApproved attuale per Token ID 3.
+Aggiungere un delay artificiale (es. 2 secondi) nel codice frontend (handleListTicket) tra la conferma di approve e l'invio di listItem per mitigare potenziali ritardi di propagazione RPC.
+Ritestare il listing del Token ID 3 usando il pulsante di test modificato e il codice con delay.
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Debug)
+
+PROGRESSO: Il listing on-chain (listItem) da wallet esterno ora funziona dopo aver introdotto un delay artificiale di 2 secondi nel frontend (handleListTicket in MyTicketsView.vue) tra la conferma della transazione approve e l'invio della transazione listItem. Questo conferma che il revert precedente era causato da ritardi di propagazione dello stato/RPC.
+Nuovo Blocco: La successiva chiamata API dal frontend al backend (POST /api/marketplace/notify-external-listing) per registrare il listing nel DB fallisce con errore 404 Not Found.
+Causa 404: La chiamata Axios nel frontend usa un URL relativo (/api/...) che punta erroneamente al server frontend (localhost:5173) invece del server backend (localhost:3000).
+Prossimo Passo Immediato: Correggere la chiamata axios.post in MyTicketsView.vue per usare l'URL completo del backend (http://localhost:3000/api/...) e ritestare il flusso di listing esterno completo (inclusa la notifica).
+Stato Attuale (Compendio - Sezione Integrazione Wallet Esterno / Debug)
+
+Listing Esterno Funzionante: Il listing on-chain (listItem) da wallet esterno funziona dopo aver aggiunto un delay di 2s nel frontend tra approve.wait(1) e l'invio di listItem.
+Notifica Backend (Listing): Identificato e corretto (o in corso di correzione) l'URL per la chiamata API POST /api/marketplace/notify-external-listing dal frontend al backend.
+Prossimo Passo Sviluppo (Fase B.1):
+Implementare la logica completa per handleCancelListing in MyTicketsView.vue per wallet esterni (inclusi gasPrice workaround, wait(1), e chiamata a nuova API backend di notifica /notify-external-cancel). Richiede creazione endpoint/logica backend.
+(Opzionale/Verifica) Assicurare che handleBuy in MarketplaceView.vue notifichi il backend dopo un acquisto esterno riuscito (creando endpoint/logica se necessario).
+(Parallelo/Successivo) Risolvere il problema della mancata visualizzazione dei biglietti/listing associati al wallet esterno nelle viste "I Miei Biglietti" e "Marketplace".

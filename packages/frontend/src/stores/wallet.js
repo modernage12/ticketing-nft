@@ -25,74 +25,53 @@ export const useWalletStore = defineStore('wallet', () => {
     }
   }
 
-  async function ensureSigner() {
-    console.log('EnsureSigner: Controllo richiesto...');
+// === NUOVA VERSIONE SEMPLIFICATA DI ensureSigner ===
+async function ensureSigner() {
+  console.log('EnsureSigner (SEMPLIFICATO): Controllo richiesto...');
 
-    // Verifica se dovremmo usare il wallet esterno e se siamo connessi
-    if (!isUsingExternalWallet.value) {
-      console.warn('EnsureSigner: Non si sta usando il wallet esterno.');
-      // throw new Error('Non si sta usando il wallet esterno.'); // Alternativa: lanciare errore
-      return null; // O restituisci null se non è richiesto un signer esterno
-    }
-    if (!isConnected.value || !connectedAddress.value) {
-      console.warn('EnsureSigner: Wallet esterno non connesso.');
-      // throw new Error('Wallet esterno non connesso.');
-      return null;
-    }
-
-    // Verifica se abbiamo un provider, prova a ricrearlo se manca
-    let currentProvider = provider.value;
-    if (!currentProvider) {
-      console.log('EnsureSigner: Provider non trovato, tento di ricrearlo...');
-      if (window.ethereum) {
-        try {
-          currentProvider = new ethers.BrowserProvider(window.ethereum);
-          provider.value = currentProvider; // Aggiorna nello store
-        } catch (err) {
-          console.error('EnsureSigner: Errore nel ricreare il provider.', err);
-          error.value = 'Errore nel provider del wallet.';
-          resetState(); // Resetta se il provider fallisce
-          return null;
-        }
-      } else {
-        console.error('EnsureSigner: window.ethereum non disponibile.');
-        error.value = 'Provider wallet non trovato.';
-        resetState();
-        return null;
-      }
-    }
-
-    // Ora prova a ottenere il signer corrente e confronta l'indirizzo
-    try {
-      const currentSigner = await currentProvider.getSigner();
-      const currentSignerAddress = await currentSigner.getAddress();
-
-      console.log('EnsureSigner: Indirizzo connesso:', connectedAddress.value);
-      console.log('EnsureSigner: Indirizzo signer attuale:', currentSignerAddress);
-
-      // Se il signer nello store è nullo o l'indirizzo non corrisponde, aggiorna lo signer nello store
-      if (!signer.value || currentSignerAddress.toLowerCase() !== connectedAddress.value.toLowerCase()) {
-        console.log('EnsureSigner: Aggiornamento signer necessario.');
-        signer.value = currentSigner;
-      } else {
-        console.log('EnsureSigner: Signer nello store è già corretto.');
-      }
-
-      // Resetta l'errore se tutto è andato bene
-      error.value = null;
-      // Restituisce il signer valido (che sia quello vecchio o quello appena aggiornato)
-      return signer.value;
-
-    } catch (err) {
-      console.error('EnsureSigner: Errore nell\'ottenere o verificare il signer:', err);
-      error.value = 'Impossibile ottenere il firmatario dal wallet.';
-      // Non resettare necessariamente lo stato qui, dipende da come vuoi gestire l'errore
-      // resetState();
-      // Restituisce null o lancia un errore per segnalare il fallimento
-      return null;
-      // throw new Error('Impossibile ottenere il firmatario dal wallet.');
-    }
+  // Controlli iniziali (invariati)
+  if (!isUsingExternalWallet.value) {
+    console.warn('EnsureSigner (SEMPLIFICATO): Non si sta usando il wallet esterno.');
+    error.value = 'Non si sta usando il wallet esterno.'; // Imposta errore nello store
+    return null; // Restituisce null
   }
+  if (!window.ethereum) {
+    console.error('EnsureSigner (SEMPLIFICATO): window.ethereum non disponibile.');
+    error.value = 'Provider wallet non trovato (Brave Wallet non attivo?).';
+    return null; // Restituisce null
+  }
+
+  console.log('EnsureSigner (SEMPLIFICATO): Tento di creare provider e ottenere signer...');
+  try {
+    // 1. Crea un nuovo provider
+    //    NOTA: Non lo salviamo più in 'this.provider' o 'provider.value' qui!
+    const freshProvider = new ethers.BrowserProvider(window.ethereum);
+    console.log('EnsureSigner (SEMPLIFICATO): Provider creato.');
+
+    // 2. Ottieni il signer da questo provider
+    //    NOTA: Non lo salviamo più in 'this.signer' o 'signer.value' qui!
+    const currentSigner = await freshProvider.getSigner();
+    const currentSignerAddress = await currentSigner.getAddress();
+    console.log('EnsureSigner (SEMPLIFICATO): Signer ottenuto per indirizzo:', currentSignerAddress);
+
+    // 3. Verifica l'indirizzo (opzionale ma utile)
+    if (!connectedAddress.value || currentSignerAddress.toLowerCase() !== connectedAddress.value.toLowerCase()) {
+       console.warn(`EnsureSigner (SEMPLIFICATO): Indirizzo signer (${currentSignerAddress}) diverso da quello nello store (${connectedAddress.value}). Potrebbe essere necessario aggiornare lo stato altrove.`);
+       // Potresti voler aggiornare connectedAddress.value qui o gestire questo caso nel componente chiamante
+       // connectedAddress.value = currentSignerAddress; // Esempio
+    }
+
+    error.value = null; // Resetta errore nello store se tutto ok fin qui
+    return currentSigner; // <<== RESTITUISCE IL SIGNER OTTENUTO
+
+  } catch (err) {
+    console.error('EnsureSigner (SEMPLIFICATO): Errore DENTRO il try/catch:', err);
+    error.value = `Impossibile ottenere il firmatario: ${err.message || 'Errore sconosciuto'}`;
+    // Non resettiamo this.signer/provider qui perché non li abbiamo impostati
+    return null; // <<== RESTITUISCE NULL IN CASO DI ERRORE
+  }
+}
+// === FINE NUOVA VERSIONE ===
 
   // =============================================
   // === INIZIO BLOCCO NUOVO: HANDLER EVENTI ===

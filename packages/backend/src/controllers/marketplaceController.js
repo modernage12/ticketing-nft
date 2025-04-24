@@ -119,9 +119,44 @@ const buyListing = async (req, res, next) => { // 'exports.' rimosso, esportiamo
     }
 };
 
+// NUOVA FUNZIONE per gestire notifica listing esterno
+/**
+ * Controller per gestire la notifica di un listing avvenuto tramite wallet esterno.
+ * Riceve i dati dal frontend e chiama il service appropriato.
+ */
+const handleExternalListingNotification = async (req, res, next) => {
+    console.log(">>> marketplaceController: Ricevuta notifica listing esterno");
+    try {
+        // Estrai i dati inviati dal frontend (dal body della richiesta POST)
+        const notificationData = req.body;
+
+        // Verifica minima (potresti aggiungere validazione più robusta qui se vuoi)
+        if (!notificationData || typeof notificationData !== 'object') {
+             throw new Error("Dati di notifica mancanti o in formato non valido.");
+        }
+
+        // Chiama la funzione nel service che abbiamo aggiunto e corretto nel passo precedente
+        // Assicurati che 'marketplaceService' sia importato correttamente all'inizio del file
+        const result = await marketplaceService.processExternalListingNotification(notificationData);
+
+        // Se il service completa senza errori, invia una risposta di successo (201 Created)
+        res.status(201).json({
+             message: 'Listing notification received and processed successfully.',
+             data: result // Restituisce eventuali dati dal service (es. listing_id)
+        });
+
+    } catch (error) {
+        // Se si verifica un errore (nel controller o nel service chiamato)
+        console.error(">>> marketplaceController: Errore processando notifica listing esterno:", error);
+        // Passa l'errore al middleware di gestione errori di Express
+        next(error);
+    }
+};
+
 module.exports = {
     getListings,
     buyListedTicket, // <-- Esporta la nuova funzione
     cancelListing,
-    buyListing
+    buyListing,
+    handleExternalListingNotification
 };

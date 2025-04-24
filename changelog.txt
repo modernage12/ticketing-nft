@@ -118,3 +118,117 @@ Ti ho fornito nuovamente le modifiche per App.vue (import store, uso store, UI w
 [2025-04-22 ~17:55 CEST] - Test Frontend P2P: Test per List/Cancel da UI MyTicketsView completati con successo.
 [2025-04-22 ~17:55 CEST] - **[INIZIO FASE B] Integrazione Wallet Esterno:** Avviata implementazione per gestione azioni utente (Marketplace P2P, Acquisto Primario, Creazione Eventi) tramite wallet esterno (MetaMask) quando selezionato.
 [2025-04-22 ~17:55 CEST] - Fase B.1 (Frontend P2P): Inizio modifiche a MyTicketsView.vue e MarketplaceView.vue per aggiungere logica condizionale (isUsingExternalWallet) e chiamate dirette a smart contract (approve, listItem, cancelListing, buyItem) tramite signer MetaMask.
+[2025-04-22 ~18:00 CEST] - Fase B.1 (Frontend P2P): Tentativo di importare ABI/Indirizzi contratti in MyTicketsView.vue.
+[Data Odierna - Es. 2025-04-22] - **[INIZIO FASE B] Integrazione Wallet Esterno**
+    - Definito piano d'azione per implementare l'uso di wallet esterni (MetaMask) per firmare transazioni blockchain direttamente dal frontend quando l'utente ha selezionato `wallet_preference = 'external'`. [cite: 1]
+    - Ambito confermato: Marketplace P2P (List, Cancel, Buy), Acquisto Primario (`buyAndMintTicket`), indirizzo Payout Creazione Evento (`registerEvent`). [cite: 1]
+    - Deciso approccio incrementale:
+        - Fase B.1: Frontend Marketplace P2P (List, Cancel, Buy). (IN CORSO)
+        - Fase B.2: Frontend Acquisto Primario. (SUCCESSIVA)
+        - Fase B.3: Backend Creazione Evento (Payout Address). (SUCCESSIVA)
+    - Esaminato `stores/wallet.js`: Confermata presenza di stato `isUsingExternalWallet` e `signer`, funzione `ensureSigner`.
+    - Definito approccio per gestione ABI/Indirizzi nel frontend: Copiare ABI JSON in `src/contracts/abi/`, definire indirizzi in `src/contracts/config.js`. [cite: 1]
+    - **Avviata implementazione Fase B.1:** Iniziata modifica di `handleListTicket` in `MyTicketsView.vue` per aggiungere logica condizionale `if (walletStore.isUsingExternalWallet)` e import necessari per ABI/config. [cite: 1]
+    - **Errore Bloccante (Risolto):** Riscontrato errore `[vite] Internal server error: Failed to resolve import "@/contracts/config.js"`. Causa identificata: il file `config.js` non era stato creato/posizionato correttamente in `src/contracts/`. L'utente ha confermato la creazione/correzione del file e l'errore è stato risolto. *(Nota: Questo documenta il ciclo di debug che abbiamo avuto, anche se causato da un mio fraintendimento precedente)* [cite: 1]
+	[Data Odierna - Es. 2025-04-22] - Debug Frontend: Risolto errore Vite "Failed to resolve import '@/contracts/config.js'" assicurando la corretta posizione del file in 'src/contracts/config.js'.
+[Data Odierna - Es. 2025-04-22] - Debug Frontend: Riscontrato nuovo problema: le pagine dell'applicazione appaiono vuote (renderizza solo layout base). Causa probabile: errore JavaScript runtime dopo modifiche a MyTicketsView.vue per importazione ABI/config e logica wallet esterno.
+[Data Odierna - Es. 2025-04-22] - Debug Frontend: In corso analisi errori console browser per identificare la causa dell'errore runtime.
+[Data Odierna] - Debug Frontend: Riscontrato errore Vue/JSReferenceError: useWalletStore is not definedinMyTicketsView.vuedurante l'esecuzione della funzionesetup. Causa: importazione diuseWalletStoremancante o errata.
+[Data Odierna] - Debug Frontend: In corso verifica e correzione dell'istruzioneimport { useWalletStore } from '@/stores/wallet';inMyTicketsView.vue.
+[Data Odierna] - Debug Frontend: Risolto errore JSReferenceError: TicketNFTJson is not defined(e simili) inMyTicketsView.vue. Causa identificata: incoerenza tra nome variabile usato nell'import (import TicketNFT_ABI from ...) e nome variabile usato per accedere alla proprietà.abi(const TICKET_NFT_ABI = TicketNFTJson.abi;). Corretto usando nomi coerenti per le variabili importate (TicketNFTJson,MarketplaceJson).
+[Data Odierna] - Sviluppo Frontend P2P (Fase B.1): Il componenteMyTicketsView.vueora si carica correttamente dopo aver corretto gli errori di import/variabile. Contiene la logica condizionaleif (walletStore.isUsingExternalWallet)nella funzionehandleListTicketper la messa in vendita.
+[Data Odierna] - Test Frontend P2P (Fase B.1): Avviata fase di test per la messa in vendita ("Vendi" inMyTicketsView.vue) utilizzando il **wallet esterno** (MetaMask).
+[Data Odierna] - Debug Frontend P2P (Fase B.1): Riscontrato erroreTypeError: Cannot read from private fielddentroethers.jsquandoensureSignerinwallet.jschiamaprovider.getSigner(). Causa probabile: stato inconsistente provider/signer dopo interazioni wallet.
+[Data Odierna] - Debug Frontend P2P (Fase B.1): Modificata funzioneensureSignerinwallet.js(versione DEBUG v2) per creare *sempre* un nuovoethers.BrowserProvidere ottenere il signer da esso, invece di riutilizzare istanze salvate nello stato. Aggiunto logging dettagliato.
+[Data Odierna] - Test Frontend P2P (Fase B.1): In corso nuovo test messa in vendita ("Vendi") con wallet esterno usandoensureSignersemplificata.
+[Data Odierna] - Debug Frontend P2P (Fase B.1): Riscontrato erroreTypeError: Cannot access private methoddentroethers.jsquando si tenta di chiamarenftContract.approve()daMyTicketsView.vueusando il signer esterno. Causa probabile: stato interno invalido dell'oggetto signer/provider restituito.
+[Data Odierna] - Debug Frontend P2P (Fase B.1): Aggiunto logging dettagliato inhandleListTicketper ispezionare oggettosigner, istanzeethers.Contracte aggiunta chiamata read-only (ownerOf) preliminare per isolare il punto di fallimento.
+[Data Odierna] - Debug Frontend P2P (Fase B.1): Riscontrato erroreTypeError: Cannot access private methoddentroethers.jsdurante chiamatanftContract.approve()oownerOf()daMyTicketsView.vue.
+[Data Odierna] - Debug Frontend P2P (Fase B.1): Ripristinato testo mancante inwindow.promptdentrohandleListTicket.
+[Data Odierna] - Debug Frontend P2P (Fase B.1): ModificataensureSignerinwallet.js(DEBUG v3) per salvareprovidernello store prima di chiamaregetSigner, nel tentativo di risolvere problemi di stato interno di ethers.js.
+[Data Odierna] - Test Frontend P2P (Fase B.1): In corso nuovo test messa in vendita ("Vendi") con wallet esterno usandoensureSignerraffinata.
+[Data Odierna - Es. 2025-04-22] - **Debug Frontend P2P (Fase B.1 - Tentativo #N):**
+    - Riscontrato errore persistente `TypeError: Cannot access private method` originato da `ethers.js` durante chiamate a contratto (`approve`, `listItem`, `ownerOf`) da `MyTicketsView.vue` con wallet esterno[cite: 410, 412].
+    - Le versioni precedenti di `ensureSigner` (DEBUG v2, v3) che forzavano ricreazione/salvataggio stato non hanno risolto[cite: 408, 414].
+    - **Azione Corrente:** Modificata strategia:
+        - Semplificata funzione `ensureSigner` in `stores/wallet.js` per ottenere un signer fresco senza logica di debug complessa.
+        - Modificato `handleListTicket` in `MyTicketsView.vue` per istanziare `ethers.Contract` localmente *subito prima* delle chiamate `approve` e `listItem`, utilizzando il signer appena ottenuto.
+        - Verificata nuovamente la correttezza degli ABI e degli indirizzi dei contratti nel frontend (`src/contracts/`).
+    - **Stato:** In corso nuovo test del flusso di messa in vendita ("Vendi") con wallet esterno per validare questo approccio.
+
+
+[Data Odierna - Es. 2025-04-22] - **Debug Frontend P2P (Fase B.1 - Successo Parziale):**
+    - Riscontrato errore `-32000: transaction underpriced: gas tip cap 0` da Brave Wallet durante `signer.sendTransaction`, anche specificando parametri EIP-1559 (`maxFeePerGas`, `maxPriorityFeePerGas`).
+    - Identificato problema probabile in Brave Wallet che ignora/sovrascrive i parametri EIP-1559 su Amoy.
+    - **SOLUZIONE/WORKAROUND:** Modificato `handleListTicket` (`MyTicketsView.vue`) per usare il parametro **legacy `gasPrice`** (calcolato da `provider.getFeeData()`) invece di EIP-1559 nell'oggetto transazione passato a `signer.sendTransaction`.
+    - **SUCCESSO:** Le transazioni `approve` e `listItem` per la messa in vendita con wallet esterno (Brave Wallet) sono state inviate e confermate con successo sulla rete Amoy usando il workaround `gasPrice`.
+    - **Fase B.1 (Messa in vendita) completata.**
+[Data Odierna - Es. 2025-04-22] - **Debug Esterno - Transfer & Listing:**
+    - Tentativo di trasferimento manuale NFT (ID 9) da wallet interno a esterno (`0x356...`) tramite script backend (`transfer-nft.js`).
+    - Risolto errore `MODULE_NOT_FOUND` nello script (percorso file).
+    - Riscontrato errore DB `Chiave privata criptata non trovata per l'utente 1` nello script. Identificato ID utente corretto (5) come proprietario interno.
+    - Risolto errore `ReferenceError: ethers is not defined` nello script aggiungendo `require('ethers')`.
+    - **SUCCESSO:** Script `transfer-nft.js` eseguito con successo, trasferito Token ID 9 da wallet interno (`0x243...`) a wallet esterno (`0x356...`) su Amoy. Aggiornato DB manualmente. [cite: 1]
+    - **Test Vendita Esterna (Token 9):** Tentativo di listare Token 9 da `MyTicketsView.vue` con wallet esterno (Brave Wallet).
+    - Riscontrato errore `-32000: transaction underpriced: gas tip cap 0` in Brave Wallet, anche specificando parametri EIP-1559 (`maxFeePerGas`, `maxPriorityFeePerGas`) via `ethers.js`. [cite: 1]
+    - **WORKAROUND:** Modificato `handleListTicket` per usare parametro **legacy `gasPrice`** (ottenuto da `provider.getFeeData()`).
+    - **SUCCESSO:** Transazioni `approve` e `listItem` per Token ID 9 **completate con successo** via Brave Wallet usando `gasPrice` legacy. [cite: 1]
+    - **Debug Acquisto Esterno:** Riscontrato `ReferenceError: walletStore is not defined` in `MarketplaceView.vue` al tentativo di acquisto.
+    - **Fix:** Aggiunta inizializzazione `const walletStore = useWalletStore();` e import/definizioni mancanti (`MarketplaceJson`, `MARKETPLACE_ADDRESS`, `MARKETPLACE_ABI`) in `<script setup>` di `MarketplaceView.vue`. [cite: 1]
+    - **Problema Aperto:** Il Token ID 9 listato non appare nel Marketplace (`WorkspaceListings` ritorna 0). Da investigare (probabile notifica mancante al backend dopo listing esterno). [cite: 1]
+	[Data Odierna - Es. 2025-04-22] - **Debug & Successo Acquisto Esterno (Fase B.1):**
+    - Risolto `ReferenceError: walletStore is not defined` in `MarketplaceView.vue` aggiungendo inizializzazione store e import/definizioni mancanti (ABI/Indirizzo Marketplace).
+    - Testato acquisto P2P (Token 6) con wallet esterno (Brave Wallet) usando logica `handleBuy` aggiornata con `gasPrice` legacy ma senza invio commissione: fallito con `transaction execution reverted`.
+    - **Identificata Causa Revert:** Mancato invio del valore necessario per coprire `listingPrice + commissione` come richiesto dalla funzione `buyItem` del contratto Marketplace.
+    - **Fix:** Modificato `handleBuy` per leggere `serviceFeeBasisPoints` dal contratto Marketplace, calcolare `commissionAmount`, calcolare `totalValueToSend = listingPriceBigInt + commissionAmount`, e inviare `totalValueToSend` nel campo `value` della transazione `buyItem` (sempre usando `gasPrice` legacy).
+    - **SUCCESSO:** Transazione `buyItem` per Token ID 6 **completata con successo** via Brave Wallet. Flusso di acquisto P2P con wallet esterno funzionante.
+    - **Fase B.1 (Acquisto) completata.**
+    - **Problema Aperto:** Listing creato con wallet esterno (Token 9) non visualizzato nel marketplace. Da investigare (probabile notifica/salvataggio mancante nel DB backend).
+	[Data Odierna - Es. 2025-04-22] - **Implementazione Notifica Backend per Listing Esterno:**
+    - Obiettivo: Risolvere il problema dei listing/acquisti fatti con wallet esterno che non aggiornavano lo stato nel database del backend (cache).
+    - **Backend Service (`marketplaceService.js`):**
+        - Aggiunta nuova funzione `processExternalListingNotification` (stile `const = async...`).
+        - La funzione riceve i dati del listing dal controller.
+        - Recupera `eventId` e `originalPrice` tramite query SQL diretta alla tabella `tickets` (sostituendo la dipendenza da `ticketService`).
+        - Esegue un `INSERT ... ON CONFLICT ... DO UPDATE` (UPSERT) sulla tabella `listings` per creare/aggiornare il record del listing esterno (impostando `seller_user_id = NULL`).
+        - Esegue un `UPDATE` sulla tabella `tickets` per impostare `is_listed = true`.
+        - Gestisce correttamente la connessione al DB (`pool.connect`, `client.query`, `client.release`).
+        - Esportata correttamente tramite `module.exports`.
+    - **Backend Controller (`marketplaceController.js`):**
+        - Rimossa vecchia definizione (stile `exports.`) se presente.
+        - Aggiunta nuova funzione `handleExternalListingNotification` (stile `const = async...`).
+        - La funzione riceve `notificationData` da `req.body`, esegue validazione base.
+        - Chiama `marketplaceService.processExternalListingNotification`.
+        - Gestisce risposta (201) o errore (`next(error)`).
+        - Esportata correttamente tramite `module.exports`.
+    - **Backend Router (`marketplaceRoutes.js`):**
+        - Corretto import del controller per usare l'oggetto (`const marketplaceController = require(...)`).
+        - Corretto uso del middleware di autenticazione (`protect` invece di `authMiddleware`).
+        - Corretto riferimento alla funzione del controller (`marketplaceController.handleExternalListingNotification`).
+        - Definita rotta `POST /api/marketplace/notify-external-listing` protetta da `protect`.
+    - **Stato:** Backend modificato e riavviato con successo. Pronto per ricevere notifiche dal frontend.
+	[Data Odierna - Es. 2025-04-22] - **Debug & Fix Interazione Wallet Esterno (Fase B.1):**
+    - Risolto errore frontend `TypeError: Cannot read properties of undefined (reading 'post')` in `MyTicketsView.vue` (causato da ipotesi errata su `authStore.axiosInstance`). Corretto usando `axios.post` importato direttamente, come identificato dall'utente.
+    - **Test Listing Esterno (NFT Trasferito):** Tentativo di listare NFT (es. ID 5) precedentemente trasferito a wallet esterno (`0x356...`) usando `handleListTicket` con workaround `gasPrice` legacy.
+    - **SUCCESSO PARZIALE:** Transazione `approve` completata con successo on-chain.
+    - **ERRORE BLOCCANTE:** Transazione `listItem` successiva **fallisce on-chain** con `transaction execution reverted (status: 0)`.
+    - **Diagnosi Corrente:** Il problema risiede nella logica interna della funzione `listItem` nel contratto `Marketplace.sol`. Cause possibili: controllo "già listato", fallimento verifica approvazione interna, altre `require`.
+    - **Azione:** In attesa di analisi codice `Marketplace.sol::listItem` o verifica stato on-chain (listing/approval) per determinare causa revert.
+    - **Problema Notifica Backend:** Implementazione API backend `/notify-external-listing` e modifica frontend per chiamarla sono **in sospeso** finché il revert di `listItem` non è risolto.
+	[2025-04-24 ~13:00 CEST] - Debug listItem Revert: Identificato indirizzo deployer (`0x356...`) tramite block explorer (transazione creazione TicketNFT).
+[2025-04-24 ~13:05 CEST] - Debug listItem Revert: Tentativo fallito di verifica `TicketNFT` via Polygonscan UI ("Standard-Json-Input") a causa dell'impossibilità di inserire argomenti costruttore nel campo "ABI Data" non modificabile.
+[2025-04-24 ~13:10 CEST] - Verifica Contratto: Installato e configurato plugin `@nomicfoundation/hardhat-verify`. Risolto errore API Key spostando file `.env` nella root del progetto come richiesto da `hardhat.config.js`.
+[2025-04-24 ~13:12 CEST] - Verifica Contratto: Contratto `TicketNFT.sol` (0x64af...) verificato con successo su Amoy tramite `npx hardhat verify`.
+[2025-04-24 ~13:14 CEST] - Verifica Contratto: Contratto `Marketplace.sol` (0xDE1A...) verificato con successo su Amoy tramite `npx hardhat verify`.
+[2025-04-24 ~13:16 CEST] - Debug listItem Revert: Riscontrato ritardo/mancato aggiornamento UI Polygonscan che non mostra i contratti come verificati. Deciso di procedere ai controlli on-chain tramite console Hardhat.
+[2025-04-24 ~13:18 CEST] - Debug listItem Revert: Eseguito test listing Token ID 5 (erroneamente, via pulsante test) da frontend. Log console confermano `approve` successo (con `wait(1)`) ma `listItem` ancora fallisce (reverted).
+[2025-04-24 ~13:20 CEST] - Debug listItem Revert: Analizzato codice `handleListTicket`; confermato che l'attesa `await approveTx.wait(1)` è implementata correttamente. Ipotesi spostata su violazione Price Cap o ritardo propagazione stato/RPC.
+[2025-04-24 ~13:25 CEST] - Debug listItem Revert: Chiarito uso pulsante test necessario a causa del mancato caricamento di NFT esterni nella lista UI standard (problema noto [cite: 289, 299, 308, 314]). Modificato pulsante test per usare Token ID 3.
+[2025-04-24 ~13:31 CEST] - Debug listItem Revert: Piano d'azione definito: verificare `originalPrice` e `getApproved` per Token ID 3 via console Hardhat, aggiungere delay 2s nel frontend prima di `listItem`, ritestare listing Token ID 3.
+[2025-04-24 ~13:36 CEST] - Debug listItem Revert: Eseguiti controlli on-chain via Hardhat console per Token ID 3. Risultati: `originalPrice` = 1e16 Wei (Price Cap OK), `getApproved` = Indirizzo Zero (confermando problema visibilità/persistenza approvazione).
+[2025-04-24 ~13:40 CEST] - Fix listItem Revert: Aggiunto delay artificiale di 2s (`setTimeout`) in `MyTicketsView.vue` dopo `approveTx.wait(1)` e prima di `marketContract.listItem`.
+[2025-04-24 ~13:43 CEST] - SUCCESSO Listing Esterno: Ritestato listing Token ID 3 da frontend con delay. Transazioni `approve` e `listItem` CONFERMATE con successo on-chain. Il delay ha risolto il revert.
+[2025-04-24 ~13:43 CEST] - Errore Notifica Backend: Riscontrato errore 404 Not Found sulla chiamata `axios.post('/api/marketplace/notify-external-listing')` successiva al listing on-chain. Causa: chiamata API punta a server frontend invece che backend.
+[2025-04-24 ~13:45 CEST] - Fix Notifica Backend: In corso modifica `axios.post` in `MyTicketsView.vue` per usare URL backend completo (`http://localhost:3000/api/...`).
+[2025-04-24 ~13:45 CEST] - Fix Notifica Backend: Identificata causa errore 404 (URL relativo in chiamata Axios). Corretto `axios.post` in `MyTicketsView.vue` per usare URL backend completo (`http://localhost:3000/api/...`).
+[2025-04-24 ~13:50 CEST] - Prossimo Passo (Fase B.1): Definiti i prossimi passi: implementazione completa `handleCancelListing` per wallet esterno (con relativa API backend) e risoluzione problema visibilità UI per dati wallet esterno.
